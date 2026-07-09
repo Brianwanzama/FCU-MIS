@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Log In{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-5">
+    <div class="card fcu-card">
+      <div class="card-header">Member Login</div>
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+          {% if form.non_field_errors %}
+            <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+          {% endif %}
+          <div class="mb-3">
+            <label class="form-label">{{ form.username.label }}</label>
+            {{ form.username }}
+          </div>
+          <div class="mb-3">
+            <label class="form-label">{{ form.password.label }}</label>
+            {{ form.password }}
+          </div>
+          <button type="submit" class="btn btn-fcu-primary w-100">Log In</button>
+        </form>
+        <hr>
+        <div class="d-flex justify-content-between small">
+          <a href="{% url 'accounts:activate' %}">Activate my account</a>
+          <a href="{% url 'accounts:password_reset' %}">Forgot password?</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

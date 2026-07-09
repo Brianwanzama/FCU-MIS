@@ -1,0 +1,8 @@
+Django==6.0.7
+django-environ==0.14.0
+psycopg2-binary==2.9.12
+
+# Added in later roadmap phases (kept here as a forward reference, not yet used):
+# reportlab          # PDF statement/report generation (Phase 8)
+# openpyxl           # Excel export (Phase 8)
+# gunicorn           # production WSGI server (Phase 10)

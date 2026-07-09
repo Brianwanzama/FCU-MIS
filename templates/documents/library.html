@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Document Library{% endblock %}
+{% block content %}
+<h2 class="fcu-display">Document Library</h2>
+<p class="text-muted">Official FCU templates. Complete, print, and sign physically — these downloads are the blank forms, not a digital submission (FR-17).</p>
+
+<div class="list-group">
+  {% for doc in templates %}
+  <div class="list-group-item d-flex justify-content-between align-items-center">
+    <div>
+      <strong>{{ doc.get_doc_type_display }}</strong>
+      <div class="text-muted small">Version {{ doc.version_label }} &middot; effective {{ doc.effective_from }}</div>
+    </div>
+    <a href="{% url 'documents:download' doc.pk %}" class="btn btn-fcu-primary btn-sm">Download</a>
+  </div>
+  {% empty %}
+  <p class="text-muted">No document templates have been uploaded yet. An Administrator can add them from the Admin panel.</p>
+  {% endfor %}
+</div>
+{% endblock %}

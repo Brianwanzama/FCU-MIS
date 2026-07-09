@@ -1,0 +1,113 @@
+/* FCU-MIS design tokens — drawn from the Manual's own cover branding
+   (deep teal + gold on warm off-white), not a generic template palette. */
+:root {
+  --fcu-teal-900: #0b3d3c;
+  --fcu-teal-700: #12524f;
+  --fcu-teal-500: #1c7a76;
+  --fcu-teal-100: #e4f0ef;
+  --fcu-gold-600: #b8860b;
+  --fcu-gold-500: #c9a227;
+  --fcu-gold-200: #f1e2b3;
+  --fcu-bg: #f7f6f2;
+  --fcu-surface: #ffffff;
+  --fcu-ink: #1f2a29;
+  --fcu-ink-muted: #5b6c6a;
+  --fcu-danger: #9a3324;
+  --fcu-radius: 10px;
+}
+
+body {
+  background-color: var(--fcu-bg);
+  color: var(--fcu-ink);
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+h1, h2, h3, h4, .fcu-display {
+  font-family: "Fraunces", Georgia, "Times New Roman", serif;
+  color: var(--fcu-teal-900);
+  letter-spacing: -0.01em;
+}
+
+.navbar-fcu {
+  background: linear-gradient(120deg, var(--fcu-teal-900) 0%, var(--fcu-teal-700) 100%);
+}
+
+.navbar-fcu .navbar-brand {
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 600;
+  color: #fff !important;
+  letter-spacing: 0.02em;
+}
+
+.navbar-fcu .nav-link {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.navbar-fcu .nav-link.active,
+.navbar-fcu .nav-link:hover {
+  color: var(--fcu-gold-200) !important;
+}
+
+.fcu-brand-rule {
+  height: 3px;
+  background: linear-gradient(90deg, var(--fcu-gold-600), var(--fcu-gold-200));
+  border: 0;
+}
+
+.card.fcu-card {
+  border: 1px solid rgba(11, 61, 60, 0.12);
+  border-radius: var(--fcu-radius);
+  box-shadow: 0 1px 3px rgba(11, 61, 60, 0.06);
+}
+
+.card.fcu-card .card-header {
+  background-color: var(--fcu-teal-100);
+  color: var(--fcu-teal-900);
+  font-weight: 600;
+  border-bottom: 1px solid rgba(11, 61, 60, 0.1);
+}
+
+.btn-fcu-primary {
+  background-color: var(--fcu-teal-900);
+  border-color: var(--fcu-teal-900);
+  color: #fff;
+}
+.btn-fcu-primary:hover {
+  background-color: var(--fcu-teal-700);
+  border-color: var(--fcu-teal-700);
+  color: #fff;
+}
+
+.btn-fcu-gold {
+  background-color: var(--fcu-gold-600);
+  border-color: var(--fcu-gold-600);
+  color: #fff;
+}
+.btn-fcu-gold:hover {
+  background-color: var(--fcu-gold-500);
+  border-color: var(--fcu-gold-500);
+  color: #1f2a29;
+}
+
+.badge-status-active {
+  background-color: #1c7a76;
+}
+.badge-status-inactive {
+  background-color: var(--fcu-danger);
+}
+
+.fcu-footer {
+  color: var(--fcu-ink-muted);
+  font-size: 0.85rem;
+}
+
+/* Respect reduced-motion preferences (frontend-design quality floor) */
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+
+/* Visible keyboard focus (quality floor, not optional) */
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 3px solid var(--fcu-gold-500);
+  outline-offset: 2px;
+}
