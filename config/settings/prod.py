@@ -1,23 +1,24 @@
 from .base import *  # noqa: F401,F403
-from .base import env
 
 # ---------------------------------------------------------------------
-# Production Settings
+# Production
 # ---------------------------------------------------------------------
 
 DEBUG = False
 
-# Railway injects this variable
-ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["*"])
+# Railway domain(s)
+ALLOWED_HOSTS = [
+    "fcu-mis-production.up.railway.app",
+    ".up.railway.app",
+    "localhost",
+    "127.0.0.1",
+]
 
-# If you use a custom Railway domain or your own domain later,
-# set DJANGO_ALLOWED_HOSTS to:
-# portal.financialcycleunit.org,.up.railway.app
-
-CSRF_TRUSTED_ORIGINS = env.list(
-    "CSRF_TRUSTED_ORIGINS",
-    default=[],
-)
+# CSRF trusted origins
+CSRF_TRUSTED_ORIGINS = [
+    "https://fcu-mis-production.up.railway.app",
+    "https://*.up.railway.app",
+]
 
 # ---------------------------------------------------------------------
 # Security
@@ -43,16 +44,12 @@ SECURE_REFERRER_POLICY = "same-origin"
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
+USE_X_FORWARDED_HOST = True
+
 # ---------------------------------------------------------------------
-# Static Files
+# Static files
 # ---------------------------------------------------------------------
 
 STATICFILES_STORAGE = (
     "whitenoise.storage.CompressedManifestStaticFilesStorage"
 )
-
-# ---------------------------------------------------------------------
-# Railway
-# ---------------------------------------------------------------------
-
-USE_X_FORWARDED_HOST = True
