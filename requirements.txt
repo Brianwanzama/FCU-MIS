@@ -1,6 +1,10 @@
-Django==5.2.6
+Django==6.0.7
 django-environ==0.14.0
 psycopg2-binary==2.9.12
+gunicorn==23.0.0
+whitenoise==6.9.0
+openpyxl
+reportlab
 
 # Added in later roadmap phases (kept here as a forward reference, not yet used):
 # reportlab          # PDF statement/report generation (Phase 8)
