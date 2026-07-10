@@ -1,60 +1,189 @@
 {% extends "base.html" %}
+
 {% block title %}Dashboard{% endblock %}
+
 {% block content %}
-<h2 class="fcu-display mb-1">Welcome, {{ user.first_name|default:user.member.full_name }}</h2>
-<p class="text-muted">
-  {{ user.member.member_code }} &middot; {{ user.get_role_display }} &middot;
-  Status:
-  {% if user.member.status == "ACTIVE" %}
-    <span class="badge badge-status-active">Active</span>
-  {% else %}
-    <span class="badge badge-status-inactive">Inactive</span>
-  {% endif %}
-</p>
+
+{% if user.member %}
+    <h2 class="fcu-display mb-1">
+        Welcome, {{ user.member.full_name }}
+    </h2>
+
+    <p class="text-muted">
+        {{ user.member.member_code }}
+        &middot;
+        {{ user.get_role_display }}
+        &middot;
+
+        Status:
+
+        {% if user.member.status == "ACTIVE" %}
+            <span class="badge badge-status-active">Active</span>
+        {% else %}
+            <span class="badge badge-status-inactive">Inactive</span>
+        {% endif %}
+    </p>
+
+{% else %}
+
+    <h2 class="fcu-display mb-1">
+        Welcome, {{ user.username }}
+    </h2>
+
+    <p class="text-muted">
+        System Administrator
+    </p>
+
+{% endif %}
 
 <div class="row g-3 mt-2">
-  <div class="col-md-4">
-    <div class="card fcu-card h-100">
-      <div class="card-header">Documents</div>
-      <div class="card-body">
-        <p>Download the official Loan Application Form and Member Declaration &amp; Commitment Agreement.</p>
-        <a href="{% url 'documents:library' %}" class="btn btn-fcu-primary btn-sm">Open Document Library</a>
-      </div>
-    </div>
-  </div>
 
-  <div class="col-md-4">
-    <div class="card fcu-card h-100">
-      <div class="card-header">Contributions &amp; Cycle Progress</div>
-      <div class="card-body">
-        <p class="text-muted mb-0">Coming in Phase 3 (Contribution Management), once the Financial Cycle module is live.</p>
-      </div>
-    </div>
-  </div>
+    <div class="col-md-4">
+        <div class="card fcu-card h-100">
+            <div class="card-header">Documents</div>
+            <div class="card-body">
+                <p>
+                    Download the official Loan Application Form and
+                    Member Declaration &amp; Commitment Agreement.
+                </p>
 
-  <div class="col-md-4">
-    <div class="card fcu-card h-100">
-      <div class="card-header">Loans</div>
-      <div class="card-body">
-        <p class="text-muted mb-0">Coming in Phase 5 (Loan Management).</p>
-      </div>
-    </div>
-  </div>
+                <a href="{% url 'documents:library' %}"
+                   class="btn btn-fcu-primary btn-sm">
+                    Open Document Library
+                </a>
 
-  {% if user.is_administrator %}
-  <div class="col-md-4">
-    <div class="card fcu-card h-100">
-      <div class="card-header">Administration</div>
-      <div class="card-body">
-        <ul class="list-unstyled mb-0">
-          <li><a href="{% url 'accounts:user_management' %}">Manage Users &amp; Roles</a></li>
-          <li><a href="{% url 'admin:members_member_changelist' %}">Manage Members</a></li>
-          <li><a href="{% url 'admin:auditlog_auditlog_changelist' %}">View Audit Log</a></li>
-          <li><a href="{% url 'admin:documents_documenttemplate_changelist' %}">Manage Document Templates</a></li>
-        </ul>
-      </div>
+            </div>
+        </div>
     </div>
-  </div>
-  {% endif %}
+
+    <div class="col-md-4">
+        <div class="card fcu-card h-100">
+            <div class="card-header">Contributions &amp; Cycle Progress</div>
+
+            <div class="card-body">
+
+                <p class="text-muted mb-1">
+                    Current Cycle:
+                    <strong>Cycle 5</strong>
+                </p>
+
+                <p class="text-muted mb-1">
+                    Target Contribution:
+                    <strong>UGX 630,000</strong>
+                </p>
+
+                <p class="text-muted">
+                    Contribution data will appear here once the Treasurer
+                    records payments.
+                </p>
+
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card fcu-card h-100">
+            <div class="card-header">Loans</div>
+
+            <div class="card-body">
+
+                <p class="text-muted">
+                    Loan balances, repayments and loan history will appear
+                    here once the Loan module is activated.
+                </p>
+
+            </div>
+        </div>
+    </div>
+
+    {% if user.is_administrator %}
+
+    <div class="col-md-6">
+
+        <div class="card fcu-card h-100">
+
+            <div class="card-header">
+                Administration
+            </div>
+
+            <div class="card-body">
+
+                <ul class="list-unstyled">
+
+                    <li>
+                        <a href="{% url 'accounts:user_management' %}">
+                            Manage Users &amp; Roles
+                        </a>
+                    </li>
+
+                    <li>
+                        <a href="{% url 'admin:members_member_changelist' %}">
+                            Manage Members
+                        </a>
+                    </li>
+
+                    <li>
+                        <a href="{% url 'admin:auditlog_auditlog_changelist' %}">
+                            Audit Log
+                        </a>
+                    </li>
+
+                    <li>
+                        <a href="{% url 'admin:documents_documenttemplate_changelist' %}">
+                            Document Templates
+                        </a>
+                    </li>
+
+                </ul>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="col-md-6">
+
+        <div class="card fcu-card h-100">
+
+            <div class="card-header">
+                FCU Summary
+            </div>
+
+            <div class="card-body">
+
+                <table class="table table-sm">
+
+                    <tr>
+                        <td>Total Members</td>
+                        <td><strong>19</strong></td>
+                    </tr>
+
+                    <tr>
+                        <td>Current Cycle</td>
+                        <td><strong>Cycle 5</strong></td>
+                    </tr>
+
+                    <tr>
+                        <td>Cycle Target</td>
+                        <td><strong>UGX 630,000/member</strong></td>
+                    </tr>
+
+                    <tr>
+                        <td>Status</td>
+                        <td><span class="badge badge-status-active">Operational</span></td>
+                    </tr>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    {% endif %}
+
 </div>
+
 {% endblock %}

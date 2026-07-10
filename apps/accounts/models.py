@@ -4,10 +4,19 @@ from django.db import models
 
 class User(AbstractUser):
     """
-    Custom auth user (AUTH_USER_MODEL). Every User corresponds to exactly one
-    Member (closed-membership system, FR-2) and carries the RBAC role (FR-3).
-    `username` is set to the member_code at activation time, so members can log
-    in with the same ID that identifies them everywhere else in the system.
+    Custom authentication user (AUTH_USER_MODEL).
+
+    Every User corresponds to exactly one FCU Member and carries a role
+    for Role-Based Access Control (RBAC).
+
+    Login:
+        - Members authenticate using their email address.
+        - The Member Code (e.g. FCU001) remains the permanent financial
+          identifier used throughout the system for contributions, loans,
+          statements and reporting.
+
+    A technical superuser created during deployment may exist without an
+    associated Member record.
     """
 
     class Role(models.TextChoices):
@@ -19,22 +28,43 @@ class User(AbstractUser):
 
     member = models.OneToOneField(
         "members.Member",
-        on_delete=models.PROTECT,  # never allow a Member to be deleted out from under an active login
+        on_delete=models.PROTECT,
         related_name="user_account",
         null=True,
         blank=True,
         help_text=(
-            "Null only for a technical break-glass superuser created via createsuperuser "
-            "(e.g. initial deployment bootstrapping). Every real member-facing account "
-            "(Member/Treasurer/Chairperson/Secretary/Administrator) must have one."
+            "Leave blank only for a technical superuser created during "
+            "initial deployment. Every real FCU member account must be "
+            "linked to exactly one Member record."
         ),
     )
-    role = models.CharField(max_length=20, choices=Role.choices, default=Role.MEMBER)
+
+    role = models.CharField(
+        max_length=20,
+        choices=Role.choices,
+        default=Role.MEMBER,
+    )
 
     def __str__(self):
-        return f"{self.member.member_code} ({self.get_role_display()})"
+        """
+        Safe string representation.
 
-    # --- convenience checks used throughout templates/views for RBAC (FR-3) ---
+        Handles deployment superusers that are intentionally created
+        without a linked Member record.
+        """
+        if self.member:
+            return (
+                f"{self.member.member_code} - "
+                f"{self.member.full_name} "
+                f"({self.get_role_display()})"
+            )
+
+        return f"{self.username} ({self.get_role_display()})"
+
+    # ------------------------------------------------------------------
+    # Role convenience properties
+    # ------------------------------------------------------------------
+
     @property
     def is_administrator(self):
         return self.role == self.Role.ADMINISTRATOR
@@ -57,10 +87,19 @@ class User(AbstractUser):
 
     @property
     def has_financial_write_access(self):
-        """Treasurer + Administrator can record contributions/loans/repayments/expenses (FR-13/FR-14)."""
-        return self.role in (self.Role.TREASURER, self.Role.ADMINISTRATOR)
+        """
+        Treasurer and Administrator can record contributions,
+        loans, repayments and expenses.
+        """
+        return self.role in (
+            self.Role.TREASURER,
+            self.Role.ADMINISTRATOR,
+        )
 
     @property
     def has_reports_access(self):
-        """Everyone except a plain Member can view the cross-member reports (FR-13/FR-14/brief)."""
+        """
+        Treasurer, Administrator, Secretary and Chairperson
+        can access organisation-wide reports.
+        """
         return self.role != self.Role.MEMBER
