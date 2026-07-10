@@ -4,7 +4,7 @@ from .base import *  # noqa: F401,F403
 # Production
 # ---------------------------------------------------------------------
 
-DEBUG = False
+DEBUG = True
 
 # Railway domain(s)
 ALLOWED_HOSTS = [
