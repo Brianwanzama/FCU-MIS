@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}Cycle {{ cycle.cycle_number }}{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb small">
+    <li class="breadcrumb-item"><a href="{% url 'cycles:list' %}">Cycles</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Cycle {{ cycle.cycle_number }}</li>
+  </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-3">
+  <div>
+    <h1 class="mb-2">Cycle {{ cycle.cycle_number }} &middot; {{ cycle.name }}</h1>
+    <div>
+      {% include "cycles/_status_badge.html" with cycle=cycle %}
+      <span class="text-muted ms-2">{{ cycle.financial_year.label }}</span>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 flex-wrap">
+    {% if not cycle.is_locked %}
+      <a href="{% url 'cycles:edit' cycle.pk %}" class="btn btn-outline-secondary">Edit</a>
+    {% endif %}
+
+    {% if cycle.status == "UPCOMING" %}
+      <form method="post" action="{% url 'cycles:activate' cycle.pk %}" class="d-inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-fcu-primary"
+                {% if active_cycle %}disabled title="Close Cycle {{ active_cycle.cycle_number }} first"{% endif %}>
+          Activate
+        </button>
+      </form>
+    {% endif %}
+
+    {% if cycle.status == "ACTIVE" %}
+      <a href="{% url 'cycles:close' cycle.pk %}" class="btn btn-fcu-gold">Close cycle</a>
+    {% endif %}
+
+    {% if cycle.status == "CLOSED" %}
+      <a href="{% url 'cycles:reopen' cycle.pk %}" class="btn btn-outline-danger">Reopen</a>
+    {% endif %}
+
+    {% if deletable %}
+      <a href="{% url 'cycles:delete' cycle.pk %}" class="btn btn-outline-danger">Delete</a>
+    {% endif %}
+  </div>
+</div>
+
+{% if cycle.status == "UPCOMING" and active_cycle %}
+  <div class="alert alert-info">
+    <strong>Cycle {{ active_cycle.cycle_number }} is still active.</strong>
+    Close it before activating this one. Closing locks its records &mdash; so it is a
+    deliberate step, not something that happens to you as a side effect.
+  </div>
+{% endif %}
+
+{% if cycle.is_locked %}
+  <div class="alert alert-secondary">
+    <strong>Locked.</strong> This cycle was closed on {{ cycle.closed_at|date:"d M Y, H:i" }}
+    {% if cycle.closed_by %}by {{ cycle.closed_by }}{% endif %}.
+    No financial records can be written against it while it stays closed.
+  </div>
+{% endif %}
+
+{% if cycle.reopen_count %}
+  <div class="alert alert-warning">
+    <strong>This cycle has been reopened {{ cycle.reopen_count }} time{{ cycle.reopen_count|pluralize }}.</strong>
+    See the audit log for the reasons given.
+  </div>
+{% endif %}
+
+<div class="row g-4">
+  <div class="col-lg-7">
+    <div class="card fcu-card">
+      <div class="card-header">Cycle details</div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-sm-5">Period</dt>
+          <dd class="col-sm-7">{{ cycle.start_date|date:"d M Y" }} &ndash; {{ cycle.end_date|date:"d M Y" }}</dd>
+
+          <dt class="col-sm-5">Duration</dt>
+          <dd class="col-sm-7">
+            {{ cycle.duration_months }} month{{ cycle.duration_months|pluralize }}
+            {% if cycle.duration_months != 6 %}
+              <span class="badge bg-warning text-dark">Non-standard</span>
+            {% endif %}
+          </dd>
+
+          {% if cycle.duration_override_reason %}
+            <dt class="col-sm-5">Reason for duration</dt>
+            <dd class="col-sm-7 text-muted">{{ cycle.duration_override_reason }}</dd>
+          {% endif %}
+
+          <dt class="col-sm-5">Payment window closes</dt>
+          <dd class="col-sm-7">
+            {{ cycle.payment_window_closes|date:"d M Y" }}
+            <div class="text-muted small">
+              Manual 3.2 &mdash; a month's contribution may arrive up to the 5th of the
+              following month, which is after this cycle's own end date.
+            </div>
+          </dd>
+
+          <dt class="col-sm-5">Financial year</dt>
+          <dd class="col-sm-7">{{ cycle.financial_year.label }}</dd>
+
+          <dt class="col-sm-5">Created</dt>
+          <dd class="col-sm-7">{{ cycle.created_at|date:"d M Y, H:i" }}</dd>
+
+          {% if cycle.activated_at %}
+            <dt class="col-sm-5">Activated</dt>
+            <dd class="col-sm-7">
+              {{ cycle.activated_at|date:"d M Y, H:i" }}
+              {% if cycle.activated_by %}<span class="text-muted">by {{ cycle.activated_by }}</span>{% endif %}
+            </dd>
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card fcu-card">
+      <div class="card-header">Contribution structure</div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-7">Monthly savings</dt>
+          <dd class="col-5 text-end">UGX {{ cycle.monthly_savings_amount|floatformat:0|intcomma }}</dd>
+
+          <dt class="col-7">Monthly emergency</dt>
+          <dd class="col-5 text-end">UGX {{ cycle.monthly_emergency_amount|floatformat:0|intcomma }}</dd>
+
+          <dt class="col-7">Months</dt>
+          <dd class="col-5 text-end">&times; {{ cycle.duration_months }}</dd>
+        </dl>
+        <hr>
+        <dl class="row mb-0">
+          <dt class="col-7 fcu-display">Target per member</dt>
+          <dd class="col-5 text-end fw-bold">
+            UGX {{ cycle.per_member_target|floatformat:0|intcomma }}
+          </dd>
+
+          <dt class="col-7">Unit-wide target</dt>
+          <dd class="col-5 text-end">UGX {{ cycle.unit_target|floatformat:0|intcomma }}</dd>
+        </dl>
+        <p class="text-muted small mb-0 mt-3">
+          The unit-wide figure is the per-member target multiplied by the number of
+          currently Active members. It is calculated on the fly, not stored, because
+          membership changes during a cycle.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if not deletable and cycle.status == "UPCOMING" %}
+  <p class="text-muted small mt-3">Cannot delete: {{ delete_blocker }}</p>
+{% endif %}
+{% endblock %}

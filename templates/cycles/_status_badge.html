@@ -1,0 +1,7 @@
+{% if cycle.status == "ACTIVE" %}
+  <span class="badge badge-status-active">Active</span>
+{% elif cycle.status == "CLOSED" %}
+  <span class="badge bg-secondary">Closed &middot; Locked</span>
+{% else %}
+  <span class="badge bg-warning text-dark">Upcoming</span>
+{% endif %}

@@ -36,6 +36,12 @@
                 {% if user.is_administrator %}
 
                 <li class="nav-item">
+                    <a class="nav-link" href="{% url 'cycles:list' %}">
+                        Cycles
+                    </a>
+                </li>
+
+                <li class="nav-item">
                     <a class="nav-link" href="{% url 'accounts:user_management' %}">
                         Users &amp; Roles
                     </a>

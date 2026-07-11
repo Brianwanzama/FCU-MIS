@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Reopen Cycle {{ cycle.cycle_number }}{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-lg-8">
+    <h1 class="mb-3">Reopen Cycle {{ cycle.cycle_number }}?</h1>
+    <p class="text-muted">
+      {{ cycle.name }} &middot; closed {{ cycle.closed_at|date:"d M Y" }}
+      {% if cycle.closed_by %}by {{ cycle.closed_by }}{% endif %}
+    </p>
+
+    <div class="alert alert-danger">
+      <strong>This unlocks a closed financial period.</strong>
+      It is the most consequential thing you can do in this module. The reason you
+      give below is written to the audit log against your name and cannot be edited
+      or removed afterwards.
+    </div>
+
+    <div class="card fcu-card">
+      <div class="card-body">
+        <form method="post" novalidate>
+          {% csrf_token %}
+
+          <div class="mb-3">
+            <label for="{{ form.reason.id_for_label }}" class="form-label">
+              {{ form.reason.label }} <span class="text-danger">*</span>
+            </label>
+            {{ form.reason }}
+            {% for error in form.reason.errors %}
+              <div class="text-danger small mt-1">{{ error }}</div>
+            {% endfor %}
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-outline-danger">Reopen cycle</button>
+            <a href="{% url 'cycles:detail' cycle.pk %}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

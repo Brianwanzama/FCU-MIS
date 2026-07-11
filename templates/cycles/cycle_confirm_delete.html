@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Delete Cycle {{ cycle.cycle_number }}{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-lg-8">
+    <h1 class="mb-3">Delete Cycle {{ cycle.cycle_number }}?</h1>
+    <p class="text-muted">{{ cycle.name }}</p>
+
+    {% if deletable %}
+      <div class="alert alert-warning">
+        This cycle is Upcoming, has never been activated, and has no financial records
+        attached, so deleting it removes nothing but the plan itself. The deletion is
+        still recorded in the audit log.
+      </div>
+
+      <form method="post">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-outline-danger">Delete cycle</button>
+        <a href="{% url 'cycles:detail' cycle.pk %}" class="btn btn-outline-secondary">Cancel</a>
+      </form>
+    {% else %}
+      <div class="alert alert-danger">
+        <strong>This cycle cannot be deleted.</strong>
+        <p class="mb-0 mt-2">{{ blocker }}</p>
+      </div>
+      <a href="{% url 'cycles:detail' cycle.pk %}" class="btn btn-outline-secondary">Back</a>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

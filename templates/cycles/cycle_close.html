@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Close Cycle {{ cycle.cycle_number }}{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-lg-8">
+    <h1 class="mb-3">Close Cycle {{ cycle.cycle_number }}?</h1>
+    <p class="text-muted">
+      {{ cycle.name }} &middot; {{ cycle.start_date|date:"d M Y" }} &ndash; {{ cycle.end_date|date:"d M Y" }}
+    </p>
+
+    <div class="alert alert-secondary">
+      <strong>Closing locks the cycle.</strong>
+      Once closed, no contribution, loan or repayment can be recorded against it.
+      Only an Administrator can reopen it, and only with a written reason that is
+      permanently recorded.
+    </div>
+
+    {% if warnings %}
+      <div class="alert alert-warning">
+        <strong>Before you close, read these:</strong>
+        <ul class="mb-0 mt-2">
+          {% for warning in warnings %}<li>{{ warning }}</li>{% endfor %}
+        </ul>
+      </div>
+    {% else %}
+      <div class="alert alert-success">
+        No outstanding issues detected. The cycle has ended and its payment window has passed.
+      </div>
+    {% endif %}
+
+    <div class="card fcu-card">
+      <div class="card-body">
+        <form method="post" novalidate>
+          {% csrf_token %}
+
+          <div class="form-check mb-3">
+            {{ form.confirm }}
+            <label class="form-check-label" for="{{ form.confirm.id_for_label }}">
+              {{ form.confirm.label }}
+              {% if warnings %} I have read the warnings above.{% endif %}
+            </label>
+            {% for error in form.confirm.errors %}
+              <div class="text-danger small mt-1">{{ error }}</div>
+            {% endfor %}
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-fcu-gold">Close and lock cycle</button>
+            <a href="{% url 'cycles:detail' cycle.pk %}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

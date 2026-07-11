@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}Financial Cycles{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="mb-1">Financial Cycles</h1>
+    <p class="text-muted mb-0">
+      Every contribution, loan and repayment belongs to exactly one cycle.
+    </p>
+  </div>
+  <a href="{% url 'cycles:create' %}" class="btn btn-fcu-primary">New cycle</a>
+</div>
+
+{% if active_cycle %}
+  <div class="card fcu-card mb-4">
+    <div class="card-header">Currently active</div>
+    <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div>
+        <h4 class="mb-1">
+          <a href="{% url 'cycles:detail' active_cycle.pk %}" class="text-decoration-none">
+            Cycle {{ active_cycle.cycle_number }} &middot; {{ active_cycle.name }}
+          </a>
+        </h4>
+        <div class="text-muted small">
+          {{ active_cycle.start_date|date:"d M Y" }} &ndash; {{ active_cycle.end_date|date:"d M Y" }}
+          &middot; Target UGX {{ active_cycle.per_member_target|floatformat:0|intcomma }} per member
+        </div>
+      </div>
+      {% include "cycles/_status_badge.html" with cycle=active_cycle %}
+    </div>
+  </div>
+{% else %}
+  <div class="alert alert-warning">
+    <strong>No cycle is active.</strong>
+    Contributions, loans and repayments cannot be recorded until one is.
+  </div>
+{% endif %}
+
+<div class="card fcu-card">
+  <div class="card-header">All cycles</div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead>
+        <tr>
+          <th scope="col">#</th>
+          <th scope="col">Name</th>
+          <th scope="col">Financial year</th>
+          <th scope="col">Period</th>
+          <th scope="col" class="text-end">Months</th>
+          <th scope="col" class="text-end">Target / member (UGX)</th>
+          <th scope="col">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for cycle in cycles %}
+          <tr>
+            <th scope="row">{{ cycle.cycle_number }}</th>
+            <td>
+              <a href="{% url 'cycles:detail' cycle.pk %}" class="text-decoration-none fw-semibold">
+                {{ cycle.name }}
+              </a>
+            </td>
+            <td>{{ cycle.financial_year }}</td>
+            <td class="small text-muted">
+              {{ cycle.start_date|date:"d M Y" }} &ndash; {{ cycle.end_date|date:"d M Y" }}
+            </td>
+            <td class="text-end">
+              {{ cycle.duration_months }}
+              {% if cycle.duration_months != 6 %}
+                <span class="badge bg-warning text-dark ms-1" title="Non-standard duration (Manual 2.1(b))">!</span>
+              {% endif %}
+            </td>
+            <td class="text-end">{{ cycle.per_member_target|floatformat:0|intcomma }}</td>
+            <td>{% include "cycles/_status_badge.html" with cycle=cycle %}</td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="7" class="text-center text-muted py-4">
+              No cycles yet. Create Cycle 1 to begin.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if financial_years %}
+  <div class="card fcu-card mt-4">
+    <div class="card-header">Financial years</div>
+    <ul class="list-group list-group-flush">
+      {% for fy in financial_years %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <span>{{ fy.label }}</span>
+          <span class="text-muted small">
+            {{ fy.cycle_count }} cycle{{ fy.cycle_count|pluralize }}
+            {% if fy.is_complete %}<span class="badge bg-secondary ms-2">Complete</span>{% endif %}
+          </span>
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}
+{% endblock %}

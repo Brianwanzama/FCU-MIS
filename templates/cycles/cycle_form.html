@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}{% if cycle %}Edit Cycle {{ cycle.cycle_number }}{% else %}New cycle{% endif %}{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb small">
+    <li class="breadcrumb-item"><a href="{% url 'cycles:list' %}">Cycles</a></li>
+    {% if cycle %}
+      <li class="breadcrumb-item">
+        <a href="{% url 'cycles:detail' cycle.pk %}">Cycle {{ cycle.cycle_number }}</a>
+      </li>
+      <li class="breadcrumb-item active" aria-current="page">Edit</li>
+    {% else %}
+      <li class="breadcrumb-item active" aria-current="page">New</li>
+    {% endif %}
+  </ol>
+</nav>
+
+<h1 class="mb-4">
+  {% if cycle %}Edit Cycle {{ cycle.cycle_number }}{% else %}New financial cycle{% endif %}
+</h1>
+
+<div class="row">
+  <div class="col-lg-8">
+    <div class="card fcu-card">
+      <div class="card-body">
+
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">
+            {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+          </div>
+        {% endif %}
+
+        <form method="post" novalidate>
+          {% csrf_token %}
+
+          {% for field in form %}
+            <div class="mb-3">
+              <label for="{{ field.id_for_label }}" class="form-label">
+                {{ field.label }}
+                {% if field.field.required %}<span class="text-danger">*</span>{% endif %}
+              </label>
+              {{ field }}
+              {% if field.help_text %}
+                <div class="form-text">{{ field.help_text }}</div>
+              {% endif %}
+              {% for error in field.errors %}
+                <div class="text-danger small mt-1">{{ error }}</div>
+              {% endfor %}
+            </div>
+          {% endfor %}
+
+          <div class="alert alert-light border small">
+            <strong>Calculated for you, not typed:</strong>
+            the end date (start date + duration), the target per member
+            (monthly savings + emergency, times the number of months), and the
+            financial year. That way they can never disagree with each other.
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-fcu-primary">
+              {% if cycle %}Save changes{% else %}Create cycle{% endif %}
+            </button>
+            <a href="{% if cycle %}{% url 'cycles:detail' cycle.pk %}{% else %}{% url 'cycles:list' %}{% endif %}"
+               class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
