@@ -6,17 +6,19 @@ class User(AbstractUser):
     """
     Custom authentication user (AUTH_USER_MODEL).
 
-    Every User corresponds to exactly one FCU Member and carries a role
-    for Role-Based Access Control (RBAC).
+    Every User corresponds to exactly one FCU Member and carries one
+    application role.
 
-    Login:
-        - Members authenticate using their email address.
-        - The Member Code (e.g. FCU001) remains the permanent financial
-          identifier used throughout the system for contributions, loans,
-          statements and reporting.
+    Design Decision
+    ----------------
+    FCU uses a single primary role.
 
-    A technical superuser created during deployment may exist without an
-    associated Member record.
+    Administrator is the highest privilege level and automatically inherits
+    all Treasurer, Secretary, Chairperson and Member capabilities through the
+    application's permission layer.
+
+    This keeps the database simple while allowing FCU001 (Administrator) to
+    perform every function in the system.
     """
 
     class Role(models.TextChoices):
@@ -33,9 +35,8 @@ class User(AbstractUser):
         null=True,
         blank=True,
         help_text=(
-            "Leave blank only for a technical superuser created during "
-            "initial deployment. Every real FCU member account must be "
-            "linked to exactly one Member record."
+            "Leave blank only for a technical deployment superuser. "
+            "Every FCU member account must be linked to one Member record."
         ),
     )
 
@@ -46,12 +47,6 @@ class User(AbstractUser):
     )
 
     def __str__(self):
-        """
-        Safe string representation.
-
-        Handles deployment superusers that are intentionally created
-        without a linked Member record.
-        """
         if self.member:
             return (
                 f"{self.member.member_code} - "
@@ -61,9 +56,9 @@ class User(AbstractUser):
 
         return f"{self.username} ({self.get_role_display()})"
 
-    # ------------------------------------------------------------------
-    # Role convenience properties
-    # ------------------------------------------------------------------
+    # ==========================================================
+    # Basic Role Helpers
+    # ==========================================================
 
     @property
     def is_administrator(self):
@@ -74,32 +69,74 @@ class User(AbstractUser):
         return self.role == self.Role.TREASURER
 
     @property
-    def is_chairperson(self):
-        return self.role == self.Role.CHAIRPERSON
-
-    @property
     def is_secretary(self):
         return self.role == self.Role.SECRETARY
+
+    @property
+    def is_chairperson(self):
+        return self.role == self.Role.CHAIRPERSON
 
     @property
     def is_plain_member(self):
         return self.role == self.Role.MEMBER
 
+    # ==========================================================
+    # Permission Helpers
+    #
+    # Administrator automatically inherits all permissions.
+    # The rest of the application should use these helpers
+    # instead of comparing roles directly.
+    # ==========================================================
+
+    @property
+    def has_full_access(self):
+        """
+        System Administrator.
+
+        Full unrestricted access to every module.
+        """
+        return self.is_administrator
+
     @property
     def has_financial_write_access(self):
         """
-        Treasurer and Administrator can record contributions,
-        loans, repayments and expenses.
+        Record contributions, loans, repayments,
+        expenses and unit trust transactions.
         """
         return self.role in (
-            self.Role.TREASURER,
             self.Role.ADMINISTRATOR,
+            self.Role.TREASURER,
+        )
+
+    @property
+    def has_secretariat_access(self):
+        """
+        Member administration, correspondence,
+        meeting records and document management.
+        """
+        return self.role in (
+            self.Role.ADMINISTRATOR,
+            self.Role.SECRETARY,
+        )
+
+    @property
+    def has_chairperson_access(self):
+        """
+        Chairperson approvals and executive actions.
+        """
+        return self.role in (
+            self.Role.ADMINISTRATOR,
+            self.Role.CHAIRPERSON,
         )
 
     @property
     def has_reports_access(self):
         """
-        Treasurer, Administrator, Secretary and Chairperson
-        can access organisation-wide reports.
+        Access organisation-wide reports.
         """
-        return self.role != self.Role.MEMBER
+        return self.role in (
+            self.Role.ADMINISTRATOR,
+            self.Role.TREASURER,
+            self.Role.SECRETARY,
+            self.Role.CHAIRPERSON,
+        )

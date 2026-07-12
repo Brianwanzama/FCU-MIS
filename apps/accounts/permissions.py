@@ -1,25 +1,48 @@
 """
-Shared RBAC building blocks (FR-3). Every view in every app — current and future
-phases — should use one of these rather than re-implementing role checks inline,
-so the access rules stay consistent and are enforced server-side, never just by
-hiding a button in a template.
+Shared Role-Based Access Control (RBAC) helpers.
+
+Administrator is the highest privilege level and automatically inherits the
+permissions of every other role. Future modules (Cycles, Contributions, Loans,
+Reports, etc.) should use these helpers instead of comparing roles directly.
 """
+
 from functools import wraps
 
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.core.exceptions import PermissionDenied
 
+from .models import User
+
 
 def role_required(*roles):
-    """Function-view decorator: @role_required(User.Role.ADMINISTRATOR, User.Role.TREASURER)"""
+    """
+    Function-view decorator.
+
+    Example:
+
+        @role_required(User.Role.TREASURER)
+
+    Administrators are always allowed automatically.
+    """
 
     def decorator(view_func):
+
         @wraps(view_func)
         @login_required
         def _wrapped(request, *args, **kwargs):
-            if request.user.role not in roles:
-                raise PermissionDenied("You do not have permission to access this page.")
+
+            user = request.user
+
+            # Administrator inherits every permission.
+            if user.is_administrator:
+                return view_func(request, *args, **kwargs)
+
+            if user.role not in roles:
+                raise PermissionDenied(
+                    "You do not have permission to access this page."
+                )
+
             return view_func(request, *args, **kwargs)
 
         return _wrapped
@@ -28,30 +51,63 @@ def role_required(*roles):
 
 
 class RoleRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
-    """Class-based-view mixin. Set `allowed_roles = (User.Role.ADMINISTRATOR, ...)` on the view."""
+    """
+    Class-based view mixin.
+
+    Example:
+
+        allowed_roles = (
+            User.Role.TREASURER,
+        )
+
+    Administrators automatically pass every permission check.
+    """
 
     allowed_roles = ()
 
     def test_func(self):
-        return self.request.user.role in self.allowed_roles
+
+        user = self.request.user
+
+        if user.is_administrator:
+            return True
+
+        return user.role in self.allowed_roles
 
 
 def owner_or_staff_required(get_member_code):
     """
-    Enforces FR-3.3: a plain Member may only ever see their own record.
-    `get_member_code(request, *args, **kwargs)` should return the member_code
-    the view is about to display; staff roles (everyone but MEMBER) bypass the check.
+    A Member may only access their own record.
+
+    Administrators and office bearers automatically bypass
+    the ownership restriction.
     """
 
     def decorator(view_func):
+
         @wraps(view_func)
         @login_required
         def _wrapped(request, *args, **kwargs):
+
             user = request.user
+
+            # Administrator always has unrestricted access.
+            if user.is_administrator:
+                return view_func(request, *args, **kwargs)
+
             if user.is_plain_member:
-                target_code = get_member_code(request, *args, **kwargs)
+
+                target_code = get_member_code(
+                    request,
+                    *args,
+                    **kwargs,
+                )
+
                 if target_code != user.member.member_code:
-                    raise PermissionDenied("Members may only view their own information.")
+                    raise PermissionDenied(
+                        "Members may only view their own information."
+                    )
+
             return view_func(request, *args, **kwargs)
 
         return _wrapped

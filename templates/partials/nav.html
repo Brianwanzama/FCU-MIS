@@ -1,60 +1,78 @@
 <nav class="navbar navbar-expand-lg navbar-fcu">
+
     <div class="container">
 
-        <a class="navbar-brand" href="{% url 'core:dashboard' %}">
-            FCU-MIS
+        <a class="navbar-brand"
+           href="{% url 'core:dashboard' %}">
+
+            {{ FCU_SHORT_NAME }}
+
         </a>
 
-        <button class="navbar-toggler"
-                type="button"
-                data-bs-toggle="collapse"
-                data-bs-target="#fcuNav"
-                aria-controls="fcuNav"
-                aria-expanded="false"
-                aria-label="Toggle navigation">
+        <button
+            class="navbar-toggler"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#fcuNav"
+            aria-controls="fcuNav"
+            aria-expanded="false"
+            aria-label="Toggle navigation">
+
             <span class="navbar-toggler-icon"></span>
+
         </button>
 
-        <div class="collapse navbar-collapse" id="fcuNav">
+        <div class="collapse navbar-collapse"
+             id="fcuNav">
 
             {% if user.is_authenticated %}
 
             <ul class="navbar-nav me-auto">
 
                 <li class="nav-item">
-                    <a class="nav-link" href="{% url 'core:dashboard' %}">
+                    <a class="nav-link"
+                       href="{% url 'core:dashboard' %}">
                         Dashboard
                     </a>
                 </li>
 
                 <li class="nav-item">
-                    <a class="nav-link" href="{% url 'documents:library' %}">
+                    <a class="nav-link"
+                       href="{% url 'documents:library' %}">
                         Documents
                     </a>
                 </li>
 
-                {% if user.is_administrator %}
+                {% if user.has_financial_write_access %}
 
                 <li class="nav-item">
-                    <a class="nav-link" href="{% url 'cycles:list' %}">
+                    <a class="nav-link"
+                       href="{% url 'cycles:list' %}">
                         Cycles
                     </a>
                 </li>
 
+                {% endif %}
+
+                {% if user.has_full_access %}
+
                 <li class="nav-item">
-                    <a class="nav-link" href="{% url 'accounts:user_management' %}">
+                    <a class="nav-link"
+                       href="{% url 'accounts:user_management' %}">
                         Users &amp; Roles
                     </a>
                 </li>
 
                 <li class="nav-item">
-                    <a class="nav-link" href="{% url 'admin:members_member_changelist' %}">
+                    <a class="nav-link"
+                       href="{% url 'admin:members_member_changelist' %}">
                         Members
                     </a>
                 </li>
 
                 <li class="nav-item">
-                    <a class="nav-link" href="{% url 'admin:index' %}">
+                    <a class="nav-link"
+                       href="{% url 'admin:index' %}">
                         Admin
                     </a>
                 </li>
@@ -70,13 +88,17 @@
                     {% if user.member %}
 
                         <strong>{{ user.member.member_code }}</strong>
+
                         &middot;
+
                         {{ user.get_role_display }}
 
                     {% else %}
 
                         <strong>{{ user.username }}</strong>
+
                         &middot;
+
                         System Administrator
 
                     {% endif %}
@@ -85,11 +107,17 @@
 
                 <li class="nav-item">
 
-                    <form method="post" action="{% url 'accounts:logout' %}">
+                    <form method="post"
+                          action="{% url 'accounts:logout' %}">
+
                         {% csrf_token %}
 
-                        <button type="submit" class="btn btn-sm btn-fcu-gold">
+                        <button
+                            type="submit"
+                            class="btn btn-sm btn-fcu-gold">
+
                             Log out
+
                         </button>
 
                     </form>
@@ -103,4 +131,5 @@
         </div>
 
     </div>
+
 </nav>
