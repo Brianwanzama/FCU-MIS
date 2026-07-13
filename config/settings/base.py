@@ -64,13 +64,15 @@ LOCAL_APPS = [
     "apps.auditlog",
     "apps.cycles",
     "apps.contributions",
-    "apps.loans",
-    "apps.repayments",
-    "apps.unittrust",
-    "apps.emergencyfund",
-    "apps.expenses",
-    "apps.orgsettings",
-    "apps.reports",
+
+    # Future modules (not yet implemented)
+    # "apps.loans",
+    # "apps.repayments",
+    # "apps.unittrust",
+    # "apps.emergencyfund",
+    # "apps.expenses",
+    # "apps.orgsettings",
+    # "apps.reports",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
