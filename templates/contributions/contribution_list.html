@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}
+Contribution Register
+{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+
+    <div>
+        <h2 class="mb-1">Contribution Register</h2>
+        <p class="text-muted mb-0">
+            View and manage all FCU contributions.
+        </p>
+    </div>
+
+    <a href="{% url 'contributions:create' %}"
+       class="btn btn-primary">
+
+        + Record Contribution
+
+    </a>
+
+</div>
+
+<div class="row mb-4">
+
+    <div class="col-md-4">
+
+        <div class="card shadow-sm">
+
+            <div class="card-body">
+
+                <h6 class="text-muted">
+                    Expected
+                </h6>
+
+                <h3>
+                    UGX {{ summary.expected }}
+                </h3>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="col-md-4">
+
+        <div class="card shadow-sm">
+
+            <div class="card-body">
+
+                <h6 class="text-muted">
+                    Collected
+                </h6>
+
+                <h3>
+                    UGX {{ summary.collected }}
+                </h3>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="col-md-4">
+
+        <div class="card shadow-sm">
+
+            <div class="card-body">
+
+                <h6 class="text-muted">
+                    Outstanding
+                </h6>
+
+                <h3>
+                    UGX {{ summary.outstanding }}
+                </h3>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<div class="card shadow-sm">
+
+    <div class="card-body">
+
+        <table class="table table-hover align-middle">
+
+            <thead>
+
+                <tr>
+
+                    <th>Date</th>
+                    <th>Member</th>
+                    <th>Cycle</th>
+                    <th>Type</th>
+                    <th class="text-end">Amount</th>
+                    <th>Method</th>
+                    <th>Recorded By</th>
+
+                </tr>
+
+            </thead>
+
+            <tbody>
+
+            {% for contribution in contributions %}
+
+                <tr>
+
+                    <td>
+                        {{ contribution.payment_date }}
+                    </td>
+
+                    <td>
+
+                        {{ contribution.member.member_code }}
+
+                        <br>
+
+                        <small class="text-muted">
+                            {{ contribution.member }}
+                        </small>
+
+                    </td>
+
+                    <td>
+                        {{ contribution.cycle }}
+                    </td>
+
+                    <td>
+                        {{ contribution.get_contribution_type_display }}
+                    </td>
+
+                    <td class="text-end">
+
+                        {{ contribution.amount }}
+
+                    </td>
+
+                    <td>
+
+                        {{ contribution.get_payment_method_display }}
+
+                    </td>
+
+                    <td>
+
+                        {{ contribution.recorded_by }}
+
+                    </td>
+
+                </tr>
+
+            {% empty %}
+
+                <tr>
+
+                    <td colspan="7"
+                        class="text-center py-5">
+
+                        No contributions have been recorded.
+
+                    </td>
+
+                </tr>
+
+            {% endfor %}
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+</div>
+
+{% endblock %}
