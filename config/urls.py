@@ -5,9 +5,16 @@ from django.urls import include, path
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+
+    # Authentication & Users
     path("accounts/", include("apps.accounts.urls")),
+
+    # Core Modules
     path("documents/", include("apps.documents.urls")),
     path("cycles/", include("apps.cycles.urls")),
+    path("contributions/", include("apps.contributions.urls")),
+
+    # Dashboard
     path("", include("apps.core.urls")),
 ]
 

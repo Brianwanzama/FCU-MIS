@@ -5,37 +5,53 @@ from django.db import models
 
 class Member(models.Model):
     """
-    The core, permanent identity record for an FCU member (SRS §7/§9, FR-1).
-    member_code (e.g. "FCU005") is the human-facing business key used everywhere
-    in the UI and on every other table's foreign key — never the member's name.
+    The permanent identity record for an FCU member (SRS §7 / §9, FR-1).
+
+    member_code (e.g. FCU005) is the permanent business identifier used
+    throughout the system. It is never edited or reused.
     """
 
     class Status(models.TextChoices):
         ACTIVE = "ACTIVE", "Active"
         INACTIVE = "INACTIVE", "Inactive"
+        WITHDRAWN = "WITHDRAWN", "Withdrawn"
+
+    class InactiveReason(models.TextChoices):
+        CONTRIBUTION_ARREARS = (
+            "CONTRIBUTION_ARREARS",
+            "Contribution Arrears",
+        )
 
     member_code = models.CharField(
         max_length=10,
         unique=True,
         editable=False,
         db_index=True,
-        help_text="Permanent, system-generated. Never reused, never edited (FR-1.2).",
+        help_text="Permanent, system-generated identifier. Never edited or reused (FR-1.2).",
     )
+
     full_name = models.CharField(max_length=150)
+
     email = models.EmailField(
         unique=True,
         null=True,
         blank=True,
         help_text=(
-            "Blank (NULL) for a member whose email isn't yet known — never a fake "
-            "placeholder address. A blank email blocks that member's account "
-            "activation (FR-2.2) until an Administrator adds the real one."
+            "Leave blank (NULL) until the member provides a real email. "
+            "Members without an email cannot activate an online account "
+            "(FR-2.2)."
         ),
     )
+
     phone = models.CharField(max_length=20, blank=True)
+
     national_id_number = models.CharField(
-        "NIN", max_length=30, blank=True, help_text="National ID Number, as captured on the Loan Application Form."
+        "NIN",
+        max_length=30,
+        blank=True,
+        help_text="National Identification Number recorded on the Loan Application Form.",
     )
+
     joined_date = models.DateField()
 
     status = models.CharField(
@@ -43,19 +59,47 @@ class Member(models.Model):
         choices=Status.choices,
         default=Status.ACTIVE,
         editable=False,
+        db_index=True,
         help_text=(
-            "Computed automatically by the member-status engine (FR-6 / Manual §2.1, §3.5). "
-            "There is deliberately no form or admin field to set this directly — "
-            "see apps.cycles for the recalculation logic (added in that roadmap phase)."
+            "ACTIVE and INACTIVE are maintained automatically by the "
+            "Member Status Engine. WITHDRAWN is a permanent administrative "
+            "status applied when a member formally exits FCU."
+        ),
+    )
+
+    inactive_reason = models.CharField(
+        max_length=40,
+        choices=InactiveReason.choices,
+        blank=True,
+        editable=False,
+        help_text=(
+            "Reason the member is currently inactive. "
+            "Automatically maintained by the Member Status Engine."
+        ),
+    )
+
+    withdrawn_date = models.DateField(
+        null=True,
+        blank=True,
+        editable=False,
+        help_text=(
+            "Effective date the member officially withdrew from FCU."
+        ),
+    )
+
+    withdrawal_reason = models.TextField(
+        blank=True,
+        editable=False,
+        help_text=(
+            "Reason recorded when a member formally withdraws from FCU."
         ),
     )
 
     is_designated_admin = models.BooleanField(
         default=False,
         help_text=(
-            "Seed-time flag only. When a member with this flag set activates their account, "
-            "apps.accounts automatically assigns the Administrator role (per FCU001/FCU004 in the brief). "
-            "Not exposed in any regular member-management form."
+            "Seed-time flag only. When this member activates an account, "
+            "the Administrator role is automatically assigned."
         ),
     )
 
@@ -76,17 +120,17 @@ class Member(models.Model):
     @classmethod
     def generate_next_code(cls):
         """
-        Finds the highest existing FCU### number and returns the next one,
-        zero-padded to at least 3 digits (grows naturally past FCU999 without truncation).
+        Return the next available FCU member code.
 
-        Note: this does a table scan rather than using a DB sequence. That's a deliberate,
-        acceptable trade-off at FCU's current and Vision-2028 scale (Admin-created members
-        only, no concurrent public sign-up, target of ~30 members by 2028) — flagged here
-        so it's revisited if that assumption ever changes.
+        Codes are zero-padded to three digits (FCU001, FCU002, ...), but
+        naturally expand beyond FCU999 if membership grows.
         """
+
         max_num = 0
+
         for code in cls.objects.values_list("member_code", flat=True):
             match = re.match(r"^FCU(\d+)$", code)
             if match:
                 max_num = max(max_num, int(match.group(1)))
+
         return f"FCU{max_num + 1:03d}"
