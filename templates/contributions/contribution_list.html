@@ -9,14 +9,17 @@ Contribution Register
 <div class="d-flex justify-content-between align-items-center mb-4">
 
     <div>
-        <h2 class="mb-1">Contribution Register</h2>
+        <h2 class="fw-bold mb-1">
+            Contribution Register
+        </h2>
+
         <p class="text-muted mb-0">
-            View and manage all FCU contributions.
+            Manage member contributions and monitor collection performance.
         </p>
     </div>
 
     <a href="{% url 'contributions:create' %}"
-       class="btn btn-primary">
+       class="btn btn-fcu-gold">
 
         + Record Contribution
 
@@ -24,20 +27,25 @@ Contribution Register
 
 </div>
 
-<div class="row mb-4">
 
-    <div class="col-md-4">
+<!-- Summary Cards -->
 
-        <div class="card shadow-sm">
+<div class="row g-3 mb-4">
+
+    <div class="col-lg-3 col-md-6">
+
+        <div class="card shadow-sm h-100">
 
             <div class="card-body">
 
-                <h6 class="text-muted">
+                <small class="text-muted text-uppercase">
                     Expected
-                </h6>
+                </small>
 
-                <h3>
+                <h3 class="mt-2 mb-0">
+
                     UGX {{ summary.expected }}
+
                 </h3>
 
             </div>
@@ -46,18 +54,20 @@ Contribution Register
 
     </div>
 
-    <div class="col-md-4">
+    <div class="col-lg-3 col-md-6">
 
-        <div class="card shadow-sm">
+        <div class="card shadow-sm h-100">
 
             <div class="card-body">
 
-                <h6 class="text-muted">
+                <small class="text-muted text-uppercase">
                     Collected
-                </h6>
+                </small>
 
-                <h3>
+                <h3 class="mt-2 mb-0">
+
                     UGX {{ summary.collected }}
+
                 </h3>
 
             </div>
@@ -66,18 +76,47 @@ Contribution Register
 
     </div>
 
-    <div class="col-md-4">
+    <div class="col-lg-3 col-md-6">
 
-        <div class="card shadow-sm">
+        <div class="card shadow-sm h-100">
 
             <div class="card-body">
 
-                <h6 class="text-muted">
+                <small class="text-muted text-uppercase">
                     Outstanding
-                </h6>
+                </small>
 
-                <h3>
+                <h3 class="mt-2 mb-0">
+
                     UGX {{ summary.outstanding }}
+
+                </h3>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="col-lg-3 col-md-6">
+
+        <div class="card shadow-sm h-100">
+
+            <div class="card-body">
+
+                <small class="text-muted text-uppercase">
+                    Collection Rate
+                </small>
+
+                <h3 class="mt-2 mb-0">
+
+                    {% if summary.expected %}
+                        {{ summary.collected|floatformat:0 }} /
+                        {{ summary.expected|floatformat:0 }}
+                    {% else %}
+                        0%
+                    {% endif %}
+
                 </h3>
 
             </div>
@@ -87,100 +126,361 @@ Contribution Register
     </div>
 
 </div>
+
+
+
+<!-- Search -->
+
+<div class="card shadow-sm mb-4">
+
+    <div class="card-body">
+
+        <form method="get">
+
+            <div class="row g-3">
+
+                <div class="col-md-4">
+
+                    <input
+                        type="text"
+                        class="form-control"
+                        name="search"
+                        placeholder="Search member..."
+                        value="{{ search }}">
+
+                </div>
+
+                <div class="col-md-3">
+
+                    <select
+                        class="form-select"
+                        name="cycle">
+
+                        <option value="">
+                            All Cycles
+                        </option>
+
+                        {% for cycle in cycles %}
+
+                            <option
+                                value="{{ cycle.id }}"
+                                {% if selected_cycle == cycle.id|stringformat:"s" %}
+                                selected
+                                {% endif %}>
+
+                                {{ cycle }}
+
+                            </option>
+
+                        {% endfor %}
+
+                    </select>
+
+                </div>
+
+                <div class="col-md-2">
+
+                    <select
+                        class="form-select"
+                        name="type">
+
+                        <option value="">
+                            All Types
+                        </option>
+
+                        <option
+                            value="MONTHLY"
+                            {% if selected_type == "MONTHLY" %}selected{% endif %}>
+
+                            Monthly
+
+                        </option>
+
+                        <option
+                            value="EMERGENCY"
+                            {% if selected_type == "EMERGENCY" %}selected{% endif %}>
+
+                            Emergency
+
+                        </option>
+
+                    </select>
+
+                </div>
+
+                <div class="col-md-2">
+
+                    <select
+                        class="form-select"
+                        name="method">
+
+                        <option value="">
+                            All Methods
+                        </option>
+
+                        <option value="CASH">
+                            Cash
+                        </option>
+
+                        <option value="BANK">
+                            Bank
+                        </option>
+
+                        <option value="MOBILE_MONEY">
+                            Mobile Money
+                        </option>
+
+                    </select>
+
+                </div>
+
+                <div class="col-md-1 d-grid">
+
+                    <button
+                        class="btn btn-dark">
+
+                        Search
+
+                    </button>
+
+                </div>
+
+            </div>
+
+        </form>
+
+    </div>
+
+</div>
+
+
+
+<!-- Register -->
 
 <div class="card shadow-sm">
 
     <div class="card-body">
 
-        <table class="table table-hover align-middle">
+        <div class="table-responsive">
 
-            <thead>
+            <table class="table table-hover align-middle">
 
-                <tr>
+                <thead class="table-light">
 
-                    <th>Date</th>
-                    <th>Member</th>
-                    <th>Cycle</th>
-                    <th>Type</th>
-                    <th class="text-end">Amount</th>
-                    <th>Method</th>
-                    <th>Recorded By</th>
+                    <tr>
 
-                </tr>
+                        <th>Date</th>
+                        <th>Member</th>
+                        <th>Cycle</th>
+                        <th>Type</th>
 
-            </thead>
+                        <th class="text-end">
 
-            <tbody>
+                            Amount
 
-            {% for contribution in contributions %}
+                        </th>
 
-                <tr>
+                        <th>Method</th>
 
-                    <td>
-                        {{ contribution.payment_date }}
-                    </td>
+                        <th>Recorded By</th>
 
-                    <td>
+                        <th class="text-center">
 
-                        {{ contribution.member.member_code }}
+                            Actions
 
-                        <br>
+                        </th>
 
-                        <small class="text-muted">
-                            {{ contribution.member }}
-                        </small>
+                    </tr>
 
-                    </td>
+                </thead>
 
-                    <td>
-                        {{ contribution.cycle }}
-                    </td>
+                <tbody>
 
-                    <td>
-                        {{ contribution.get_contribution_type_display }}
-                    </td>
+                {% for contribution in contributions %}
 
-                    <td class="text-end">
+                    <tr>
 
-                        {{ contribution.amount }}
+                        <td>
 
-                    </td>
+                            {{ contribution.payment_date }}
 
-                    <td>
+                        </td>
 
-                        {{ contribution.get_payment_method_display }}
+                        <td>
 
-                    </td>
+                            <strong>
 
-                    <td>
+                                {{ contribution.member.member_code }}
 
-                        {{ contribution.recorded_by }}
+                            </strong>
 
-                    </td>
+                            <br>
 
-                </tr>
+                            <small class="text-muted">
 
-            {% empty %}
+                                {{ contribution.member }}
 
-                <tr>
+                            </small>
 
-                    <td colspan="7"
-                        class="text-center py-5">
+                        </td>
 
-                        No contributions have been recorded.
+                        <td>
 
-                    </td>
+                            {{ contribution.cycle }}
 
-                </tr>
+                        </td>
 
-            {% endfor %}
+                        <td>
 
-            </tbody>
+                            {{ contribution.get_contribution_type_display }}
 
-        </table>
+                        </td>
+
+                        <td class="text-end">
+
+                            UGX {{ contribution.amount }}
+
+                        </td>
+
+                        <td>
+
+                            {{ contribution.get_payment_method_display }}
+
+                        </td>
+
+                        <td>
+
+                            {{ contribution.recorded_by }}
+
+                        </td>
+
+                        <td class="text-center">
+
+                            <a
+                                href="#"
+                                class="btn btn-sm btn-outline-primary">
+
+                                View
+
+                            </a>
+
+                            <a
+                                href="#"
+                                class="btn btn-sm btn-outline-warning">
+
+                                Edit
+
+                            </a>
+
+                            <a
+                                href="#"
+                                class="btn btn-sm btn-outline-danger">
+
+                                Delete
+
+                            </a>
+
+                        </td>
+
+                    </tr>
+
+                {% empty %}
+
+                    <tr>
+
+                        <td colspan="8"
+                            class="text-center py-5">
+
+                            <h5 class="text-muted">
+
+                                No contributions have been recorded.
+
+                            </h5>
+
+                            <p class="text-muted">
+
+                                Start by recording the first contribution.
+
+                            </p>
+
+                            <a
+                                href="{% url 'contributions:create' %}"
+                                class="btn btn-fcu-gold">
+
+                                + Record First Contribution
+
+                            </a>
+
+                        </td>
+
+                    </tr>
+
+                {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
 
     </div>
 
 </div>
+
+
+
+{% if is_paginated %}
+
+<nav class="mt-4">
+
+    <ul class="pagination justify-content-center">
+
+        {% if page_obj.has_previous %}
+
+        <li class="page-item">
+
+            <a
+                class="page-link"
+                href="?page={{ page_obj.previous_page_number }}">
+
+                Previous
+
+            </a>
+
+        </li>
+
+        {% endif %}
+
+        <li class="page-item active">
+
+            <span class="page-link">
+
+                {{ page_obj.number }}
+
+            </span>
+
+        </li>
+
+        {% if page_obj.has_next %}
+
+        <li class="page-item">
+
+            <a
+                class="page-link"
+                href="?page={{ page_obj.next_page_number }}">
+
+                Next
+
+            </a>
+
+        </li>
+
+        {% endif %}
+
+    </ul>
+
+</nav>
+
+{% endif %}
 
 {% endblock %}
