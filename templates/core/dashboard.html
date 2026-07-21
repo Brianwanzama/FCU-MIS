@@ -36,65 +36,214 @@
 
 {% endif %}
 
-<div class="row g-3 mt-2">
+
+<!-- Summary Cards -->
+
+<div class="row g-3 mb-4">
+
+    <div class="col-lg-3 col-md-6">
+        <div class="card fcu-card h-100">
+            <div class="card-body">
+
+                <small class="text-muted">Total Members</small>
+
+                <h3>{{ member_count }}</h3>
+
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-3 col-md-6">
+        <div class="card fcu-card h-100">
+            <div class="card-body">
+
+                <small class="text-muted">Active Members</small>
+
+                <h3>{{ active_member_count }}</h3>
+
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-3 col-md-6">
+        <div class="card fcu-card h-100">
+            <div class="card-body">
+
+                <small class="text-muted">Current Cycle</small>
+
+                <h5>
+
+                    {% if current_cycle %}
+                        {{ current_cycle }}
+                    {% else %}
+                        No Active Cycle
+                    {% endif %}
+
+                </h5>
+
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-3 col-md-6">
+        <div class="card fcu-card h-100">
+            <div class="card-body">
+
+                <small class="text-muted">
+                    Collection Rate
+                </small>
+
+                <h3>
+
+                    {% if summary %}
+                        {{ summary.collection_rate }}%
+                    {% else %}
+                        0%
+                    {% endif %}
+
+                </h3>
+
+            </div>
+        </div>
+    </div>
+
+</div>
+
+
+
+<div class="row g-3">
+
+    <!-- Documents -->
 
     <div class="col-md-4">
+
         <div class="card fcu-card h-100">
-            <div class="card-header">Documents</div>
+
+            <div class="card-header">
+                Documents
+            </div>
+
             <div class="card-body">
+
                 <p>
-                    Download the official Loan Application Form and
-                    Member Declaration &amp; Commitment Agreement.
+                    Download official FCU documents.
                 </p>
 
                 <a href="{% url 'documents:library' %}"
                    class="btn btn-fcu-primary btn-sm">
-                    Open Document Library
+
+                    Open Library
+
                 </a>
 
             </div>
+
         </div>
+
     </div>
 
+
+
+    <!-- Contributions -->
+
     <div class="col-md-4">
+
         <div class="card fcu-card h-100">
-            <div class="card-header">Contributions &amp; Cycle Progress</div>
+
+            <div class="card-header">
+
+                Contributions
+
+            </div>
 
             <div class="card-body">
 
-                <p class="text-muted mb-1">
-                    Current Cycle:
-                    <strong>Cycle 5</strong>
-                </p>
+                {% if current_cycle %}
 
-                <p class="text-muted mb-1">
-                    Target Contribution:
-                    <strong>UGX 630,000</strong>
-                </p>
+                    <p>
 
-                <p class="text-muted">
-                    Contribution data will appear here once the Treasurer
-                    records payments.
-                </p>
+                        <strong>Cycle</strong><br>
+
+                        {{ current_cycle }}
+
+                    </p>
+
+                    <p>
+
+                        <strong>Target</strong><br>
+
+                        UGX {{ current_cycle.unit_target }}
+
+                    </p>
+
+                    <p>
+
+                        <strong>Collected</strong><br>
+
+                        UGX {{ summary.collected }}
+
+                    </p>
+
+                    <p>
+
+                        <strong>Outstanding</strong><br>
+
+                        UGX {{ summary.outstanding }}
+
+                    </p>
+
+                    <a href="{% url 'contributions:list' %}"
+                       class="btn btn-fcu-primary btn-sm">
+
+                        Contribution Register
+
+                    </a>
+
+                {% else %}
+
+                    <p class="text-muted">
+
+                        No active cycle.
+
+                    </p>
+
+                {% endif %}
 
             </div>
+
         </div>
+
     </div>
 
+
+
+    <!-- Loans -->
+
     <div class="col-md-4">
+
         <div class="card fcu-card h-100">
-            <div class="card-header">Loans</div>
+
+            <div class="card-header">
+
+                Loans
+
+            </div>
 
             <div class="card-body">
 
                 <p class="text-muted">
-                    Loan balances, repayments and loan history will appear
-                    here once the Loan module is activated.
+
+                    Loan module coming next.
+
                 </p>
 
             </div>
+
         </div>
+
     </div>
+
+
 
     {% if user.is_administrator %}
 
@@ -103,7 +252,9 @@
         <div class="card fcu-card h-100">
 
             <div class="card-header">
+
                 Administration
+
             </div>
 
             <div class="card-body">
@@ -112,13 +263,13 @@
 
                     <li>
                         <a href="{% url 'accounts:user_management' %}">
-                            Manage Users &amp; Roles
+                            Manage Users
                         </a>
                     </li>
 
                     <li>
                         <a href="{% url 'admin:members_member_changelist' %}">
-                            Manage Members
+                            Members
                         </a>
                     </li>
 
@@ -142,39 +293,77 @@
 
     </div>
 
+
+
     <div class="col-md-6">
 
         <div class="card fcu-card h-100">
 
             <div class="card-header">
-                FCU Summary
+
+                Recent Contributions
+
             </div>
 
             <div class="card-body">
 
-                <table class="table table-sm">
+                {% if recent_contributions %}
 
-                    <tr>
-                        <td>Total Members</td>
-                        <td><strong>19</strong></td>
-                    </tr>
+                    <table class="table table-sm">
 
-                    <tr>
-                        <td>Current Cycle</td>
-                        <td><strong>Cycle 5</strong></td>
-                    </tr>
+                        <thead>
 
-                    <tr>
-                        <td>Cycle Target</td>
-                        <td><strong>UGX 630,000/member</strong></td>
-                    </tr>
+                        <tr>
 
-                    <tr>
-                        <td>Status</td>
-                        <td><span class="badge badge-status-active">Operational</span></td>
-                    </tr>
+                            <th>Member</th>
+                            <th>Amount</th>
+                            <th>Date</th>
 
-                </table>
+                        </tr>
+
+                        </thead>
+
+                        <tbody>
+
+                        {% for contribution in recent_contributions %}
+
+                            <tr>
+
+                                <td>
+
+                                    {{ contribution.member.member_code }}
+
+                                </td>
+
+                                <td>
+
+                                    UGX {{ contribution.amount }}
+
+                                </td>
+
+                                <td>
+
+                                    {{ contribution.payment_date }}
+
+                                </td>
+
+                            </tr>
+
+                        {% endfor %}
+
+                        </tbody>
+
+                    </table>
+
+                {% else %}
+
+                    <p class="text-muted">
+
+                        No contributions recorded yet.
+
+                    </p>
+
+                {% endif %}
 
             </div>
 

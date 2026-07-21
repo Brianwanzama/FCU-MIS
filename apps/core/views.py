@@ -2,7 +2,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
 
 from apps.members.models import Member
-from apps.cycles.models import Cycle
+from apps.cycles.services import get_active_cycle
 from apps.contributions.models import Contribution
 from apps.contributions.services import cycle_contribution_summary
 
@@ -13,11 +13,7 @@ def dashboard(request):
     FCU Dashboard
     """
 
-    active_cycle = (
-        Cycle.objects
-        .filter(status=Cycle.Status.ACTIVE)
-        .first()
-    )
+    active_cycle = get_active_cycle()
 
     summary = None
 
