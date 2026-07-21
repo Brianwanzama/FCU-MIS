@@ -1,21 +1,54 @@
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import render
+from django.shortcuts import redirect, render
+
+from apps.members.models import Member
+from apps.cycles.models import Cycle
+from apps.contributions.models import Contribution
+from apps.contributions.services import cycle_contribution_summary
 
 
 @login_required
 def dashboard(request):
     """
-    Role-aware landing page (FR-12/FR-13/FR-14). Financial totals (contribution
-    progress, loan balance, cash position, etc.) are wired in once the Cycles,
-    Contributions and Loans modules land in their own roadmap phases — this
-    view is deliberately honest about what's live today rather than showing
-    placeholder numbers that look real.
+    FCU Dashboard
     """
-    return render(request, "core/dashboard.html", {"user": request.user})
+
+    active_cycle = (
+        Cycle.objects
+        .filter(status=Cycle.Status.ACTIVE)
+        .first()
+    )
+
+    summary = None
+
+    if active_cycle:
+        summary = cycle_contribution_summary(active_cycle)
+
+    context = {
+        "user": request.user,
+        "member_count": Member.objects.count(),
+        "active_member_count": Member.objects.filter(
+            status=Member.Status.ACTIVE
+        ).count(),
+        "current_cycle": active_cycle,
+        "summary": summary,
+        "recent_contributions": (
+            Contribution.objects
+            .select_related(
+                "member",
+                "recorded_by",
+            )
+            .order_by("-payment_date", "-created_at")[:5]
+        ),
+    }
+
+    return render(
+        request,
+        "core/dashboard.html",
+        context,
+    )
 
 
 @login_required
 def home_redirect(request):
-    from django.shortcuts import redirect
-
     return redirect("core:dashboard")

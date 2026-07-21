@@ -186,27 +186,43 @@ def member_contribution_summary(member, cycle):
 # CYCLE SUMMARY
 # ============================================================
 
+# ============================================================
+# CYCLE SUMMARY
+# ============================================================
+
 def cycle_contribution_summary(cycle):
     """
     Returns contribution statistics for an entire cycle.
+
+    The expected contribution is derived from the Cycle model's
+    unit_target property, which automatically uses the current
+    number of ACTIVE members.
     """
 
     collected = (
         Contribution.objects.filter(
             cycle=cycle
-        ).aggregate(total=Sum("amount"))["total"]
+        ).aggregate(
+            total=Sum("amount")
+        )["total"]
         or Decimal("0")
     )
 
-    expected = (
-        cycle.per_member_target *
-        cycle.members.count()
+    expected = cycle.unit_target
+
+    outstanding = expected - collected
+
+    collection_rate = (
+        (collected / expected * Decimal("100"))
+        if expected > 0
+        else Decimal("0")
     )
 
     return {
         "expected": expected,
         "collected": collected,
-        "outstanding": expected - collected,
+        "outstanding": outstanding,
+        "collection_rate": round(collection_rate, 2),
     }
 
 
