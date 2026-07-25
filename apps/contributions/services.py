@@ -181,7 +181,42 @@ def member_contribution_summary(member, cycle):
             (monthly_paid + emergency_paid),
     }
 
+# ============================================================
+# MEMBER BALANCE
+# ============================================================
 
+def member_balance(member, cycle):
+    """
+    Returns the member's current contribution position.
+
+    Used by:
+    - Member status evaluation
+    - Member dashboard
+    - Reports
+    """
+
+    summary = member_contribution_summary(
+        member,
+        cycle,
+    )
+
+    return {
+        "monthly_due": summary["monthly_due"],
+        "monthly_paid": summary["monthly_paid"],
+        "monthly_balance": summary["monthly_balance"],
+
+        "emergency_due": summary["emergency_due"],
+        "emergency_paid": summary["emergency_paid"],
+        "emergency_balance": summary["emergency_balance"],
+
+        "overall_due": summary["overall_due"],
+        "overall_paid": summary["overall_paid"],
+        "overall_balance": summary["overall_balance"],
+
+        "eligible": (
+            summary["overall_balance"] <= Decimal("0")
+        ),
+    }
 # ============================================================
 # CYCLE SUMMARY
 # ============================================================

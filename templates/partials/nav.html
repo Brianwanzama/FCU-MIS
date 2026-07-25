@@ -52,21 +52,28 @@
                     </a>
                 </li>
 
+                <li class="nav-item">
+                    <a class="nav-link"
+                       href="{% url 'contributions:list' %}">
+                        Contributions
+                    </a>
+                </li>
+
                 {% endif %}
 
                 {% if user.has_full_access %}
 
                 <li class="nav-item">
                     <a class="nav-link"
-                       href="{% url 'accounts:user_management' %}">
-                        Users &amp; Roles
+                       href="{% url 'members:list' %}">
+                        Members
                     </a>
                 </li>
 
                 <li class="nav-item">
                     <a class="nav-link"
-                       href="{% url 'admin:members_member_changelist' %}">
-                        Members
+                       href="{% url 'accounts:user_management' %}">
+                        Users &amp; Roles
                     </a>
                 </li>
 

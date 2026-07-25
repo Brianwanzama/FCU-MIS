@@ -1,0 +1,923 @@
+{% extends "base.html" %}
+
+{% block title %}
+{{ member.member_code }} - {{ member.full_name }}
+{% endblock %}
+
+{% block content %}
+
+<div class="container-fluid">
+
+    <!-- ===================================================== -->
+    <!-- MEMBER HEADER -->
+    <!-- ===================================================== -->
+
+    <div class="card shadow-sm border-0 mb-4">
+
+        <div class="card-body">
+
+            <div class="row align-items-center">
+
+                <div class="col-lg-8">
+
+                    <h2 class="mb-1">
+
+                        {{ member.full_name }}
+
+                    </h2>
+
+                    <h5 class="text-muted">
+
+                        {{ member.member_code }}
+
+                    </h5>
+
+                    <div class="mt-3">
+
+                        {% if member.status == "ACTIVE" %}
+
+                            <span class="badge bg-success">
+                                Active Member
+                            </span>
+
+                        {% elif member.status == "INACTIVE" %}
+
+                            <span class="badge bg-warning text-dark">
+                                Inactive Member
+                            </span>
+
+                        {% else %}
+
+                            <span class="badge bg-danger">
+                                Withdrawn
+                            </span>
+
+                        {% endif %}
+
+                        {% if current_cycle %}
+
+                            <span class="badge bg-primary">
+
+                                {{ current_cycle }}
+
+                            </span>
+
+                        {% endif %}
+
+                    </div>
+
+                </div>
+
+                <div class="col-lg-4 text-lg-end">
+
+                    <a href="{% url 'contributions:create' %}"
+                       class="btn btn-primary">
+
+                        Record Contribution
+
+                    </a>
+
+                    <button
+                        class="btn btn-outline-secondary"
+                        disabled>
+
+                        Download Statement
+
+                    </button>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ===================================================== -->
+    <!-- FINANCIAL SUMMARY -->
+    <!-- ===================================================== -->
+
+    {% if summary %}
+
+    <div class="row g-3 mb-4">
+
+        <div class="col-md-3">
+
+            <div class="card shadow-sm border-0">
+
+                <div class="card-body text-center">
+
+                    <small class="text-muted">
+
+                        Expected Contributions
+
+                    </small>
+
+                    <h3 class="mt-2">
+
+                        UGX {{ summary.contributions.overall_due }}
+
+                    </h3>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="col-md-3">
+
+            <div class="card shadow-sm border-0">
+
+                <div class="card-body text-center">
+
+                    <small class="text-muted">
+
+                        Contributions Paid
+
+                    </small>
+
+                    <h3 class="mt-2 text-success">
+
+                        UGX {{ summary.contributions.overall_paid }}
+
+                    </h3>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="col-md-3">
+
+            <div class="card shadow-sm border-0">
+
+                <div class="card-body text-center">
+
+                    <small class="text-muted">
+
+                        Outstanding
+
+                    </small>
+
+                    <h3 class="mt-2 text-danger">
+
+                        UGX {{ summary.contributions.overall_balance }}
+
+                    </h3>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="col-md-3">
+
+            <div class="card shadow-sm border-0">
+
+                <div class="card-body text-center">
+
+                    <small class="text-muted">
+
+                        Total Deposits
+
+                    </small>
+
+                    <h3 class="mt-2 text-primary">
+
+                        UGX {{ summary.total_deposits }}
+
+                    </h3>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    {% endif %}
+
+
+    <!-- ===================================================== -->
+    <!-- MEMBER PROFILE -->
+    <!-- ===================================================== -->
+
+    <div class="row g-4">
+
+        <div class="col-lg-6">
+
+            <div class="card shadow-sm border-0 h-100">
+
+                <div class="card-header bg-white">
+
+                    <h5 class="mb-0">
+
+                        Member Profile
+
+                    </h5>
+
+                </div>
+
+                <div class="card-body">
+
+                    <table class="table table-borderless">
+
+                        <tr>
+                            <th width="35%">Member Code</th>
+                            <td>{{ member.member_code }}</td>
+                        </tr>
+
+                        <tr>
+                            <th>Full Name</th>
+                            <td>{{ member.full_name }}</td>
+                        </tr>
+
+                        <tr>
+                            <th>Email</th>
+                            <td>{{ member.email|default:"Not Provided" }}</td>
+                        </tr>
+
+                        <tr>
+                            <th>Phone</th>
+                            <td>{{ member.phone|default:"Not Provided" }}</td>
+                        </tr>
+
+                        <tr>
+                            <th>National ID</th>
+                            <td>{{ member.national_id_number|default:"Not Provided" }}</td>
+                        </tr>
+
+                        <tr>
+                            <th>Joined</th>
+                            <td>{{ member.joined_date }}</td>
+                        </tr>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="col-lg-6">
+
+            <div class="card shadow-sm border-0 h-100">
+
+                <div class="card-header bg-white">
+
+                    <h5 class="mb-0">
+
+                        Membership Status
+
+                    </h5>
+
+                </div>
+
+                <div class="card-body">
+
+                    <table class="table table-borderless">
+
+                        <tr>
+                            <th width="35%">Status</th>
+                            <td>{{ member.get_status_display }}</td>
+                        </tr>
+
+                        <tr>
+                            <th>Inactive Reason</th>
+                            <td>{{ member.inactive_reason|default:"-" }}</td>
+                        </tr>
+
+                        <tr>
+                            <th>Withdrawal Date</th>
+                            <td>{{ member.withdrawn_date|default:"-" }}</td>
+                        </tr>
+
+                        <tr>
+                            <th>Withdrawal Reason</th>
+                            <td>{{ member.withdrawal_reason|default:"-" }}</td>
+                        </tr>
+
+                        <tr>
+                            <th>Current Cycle</th>
+
+                            <td>
+
+                                {% if current_cycle %}
+
+                                    {{ current_cycle }}
+
+                                {% else %}
+
+                                    No Active Cycle
+
+                                {% endif %}
+
+                            </td>
+
+                        </tr>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+        <!-- ===================================================== -->
+    <!-- FINANCIAL DASHBOARD -->
+    <!-- ===================================================== -->
+
+    {% if summary %}
+
+    <div class="row mt-4">
+
+        <!-- Contributions -->
+
+        <div class="col-lg-8 mb-4">
+
+            <div class="card shadow-sm border-0">
+
+                <div class="card-header bg-white">
+
+                    <h5 class="mb-0">
+
+                        Contribution Summary
+
+                    </h5>
+
+                </div>
+
+                <div class="card-body">
+
+                    <table class="table align-middle">
+
+                        <thead>
+
+                            <tr>
+
+                                <th></th>
+                                <th class="text-end">Expected</th>
+                                <th class="text-end">Paid</th>
+                                <th class="text-end">Balance</th>
+
+                            </tr>
+
+                        </thead>
+
+                        <tbody>
+
+                            <tr>
+
+                                <td>
+
+                                    Monthly Savings
+
+                                </td>
+
+                                <td class="text-end">
+
+                                    UGX {{ summary.contributions.monthly_due }}
+
+                                </td>
+
+                                <td class="text-end text-success">
+
+                                    UGX {{ summary.contributions.monthly_paid }}
+
+                                </td>
+
+                                <td class="text-end">
+
+                                    UGX {{ summary.contributions.monthly_balance }}
+
+                                </td>
+
+                            </tr>
+
+                            <tr>
+
+                                <td>
+
+                                    Emergency Fund
+
+                                </td>
+
+                                <td class="text-end">
+
+                                    UGX {{ summary.contributions.emergency_due }}
+
+                                </td>
+
+                                <td class="text-end text-success">
+
+                                    UGX {{ summary.contributions.emergency_paid }}
+
+                                </td>
+
+                                <td class="text-end">
+
+                                    UGX {{ summary.contributions.emergency_balance }}
+
+                                </td>
+
+                            </tr>
+
+                            <tr class="table-light fw-bold">
+
+                                <td>
+
+                                    TOTAL
+
+                                </td>
+
+                                <td class="text-end">
+
+                                    UGX {{ summary.contributions.overall_due }}
+
+                                </td>
+
+                                <td class="text-end text-success">
+
+                                    UGX {{ summary.contributions.overall_paid }}
+
+                                </td>
+
+                                <td class="text-end text-danger">
+
+                                    UGX {{ summary.contributions.overall_balance }}
+
+                                </td>
+
+                            </tr>
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+
+        <!-- Financial Position -->
+
+        <div class="col-lg-4 mb-4">
+
+            <div class="card shadow-sm border-0">
+
+                <div class="card-header bg-white">
+
+                    <h5 class="mb-0">
+
+                        Financial Position
+
+                    </h5>
+
+                </div>
+
+                <div class="card-body">
+
+                    <table class="table table-borderless">
+
+                        <tr>
+
+                            <th>Total Deposits</th>
+
+                            <td class="text-end">
+
+                                UGX {{ summary.total_deposits }}
+
+                            </td>
+
+                        </tr>
+
+                        <tr>
+
+                            <th>Loan Balance</th>
+
+                            <td class="text-end">
+
+                                UGX {{ summary.loan.balance }}
+
+                            </td>
+
+                        </tr>
+
+                        <tr>
+
+                            <th>Investments</th>
+
+                            <td class="text-end">
+
+                                UGX {{ summary.investment.unit_trust }}
+
+                            </td>
+
+                        </tr>
+
+                        <tr class="border-top fw-bold">
+
+                            <th>Net Position</th>
+
+                            <td class="text-end">
+
+                                UGX {{ summary.net_position }}
+
+                            </td>
+
+                        </tr>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+
+    <!-- ===================================================== -->
+    <!-- FCU MEMBER STATUS -->
+    <!-- ===================================================== -->
+
+    <div class="card shadow-sm border-0 mb-4">
+
+        <div class="card-header bg-white">
+
+            <h5 class="mb-0">
+
+                FCU Status
+
+            </h5>
+
+        </div>
+
+        <div class="card-body">
+
+            {% if member.status == "ACTIVE" %}
+
+                <div class="alert alert-success mb-0">
+
+                    <strong>Eligible for all FCU financial services.</strong>
+
+                    <br>
+
+                    Contributions are currently up to date.
+
+                </div>
+
+            {% elif member.status == "INACTIVE" %}
+
+                <div class="alert alert-warning mb-0">
+
+                    <strong>Member is currently inactive.</strong>
+
+                    <br>
+
+                    Outstanding contributions must be cleared before loans
+                    or other services can be approved.
+
+                </div>
+
+            {% else %}
+
+                <div class="alert alert-danger mb-0">
+
+                    <strong>Member has withdrawn from FCU.</strong>
+
+                </div>
+
+            {% endif %}
+
+        </div>
+
+    </div>
+        <!-- ===================================================== -->
+    <!-- TRANSACTION HISTORY -->
+    <!-- ===================================================== -->
+
+    <div class="card shadow-sm border-0 mb-4">
+
+        <div class="card-header bg-white d-flex justify-content-between">
+
+            <h5 class="mb-0">
+
+                Contribution History
+
+            </h5>
+
+            <span class="text-muted">
+
+                {{ transactions|length }} Transaction{{ transactions|length|pluralize }}
+
+            </span>
+
+        </div>
+
+        <div class="card-body">
+
+            {% if transactions %}
+
+            <div class="table-responsive">
+
+                <table class="table table-hover align-middle">
+
+                    <thead class="table-light">
+
+                        <tr>
+
+                            <th>Date</th>
+
+                            <th>Contribution Month</th>
+
+                            <th>Type</th>
+
+                            <th>Payment Method</th>
+
+                            <th class="text-end">Amount</th>
+
+                            <th>Reference</th>
+
+                            <th>Recorded By</th>
+
+                        </tr>
+
+                    </thead>
+
+                    <tbody>
+
+                        {% for contribution in transactions %}
+
+                        <tr>
+
+                            <td>
+
+                                {{ contribution.payment_date }}
+
+                            </td>
+
+                            <td>
+
+                                {% if contribution.period_month %}
+
+                                    {{ contribution.period_month|date:"F Y" }}
+
+                                {% else %}
+
+                                    —
+
+                                {% endif %}
+
+                            </td>
+
+                            <td>
+
+                                {{ contribution.get_contribution_type_display }}
+
+                            </td>
+
+                            <td>
+
+                                {{ contribution.get_payment_method_display }}
+
+                            </td>
+
+                            <td class="text-end fw-semibold">
+
+                                UGX {{ contribution.amount }}
+
+                            </td>
+
+                            <td>
+
+                                {{ contribution.reference|default:"—" }}
+
+                            </td>
+
+                            <td>
+
+                                {% if contribution.recorded_by %}
+
+                                    {{ contribution.recorded_by }}
+
+                                {% else %}
+
+                                    —
+
+                                {% endif %}
+
+                            </td>
+
+                        </tr>
+
+                        {% if contribution.remarks %}
+
+                        <tr>
+
+                            <td></td>
+
+                            <td colspan="6">
+
+                                <small class="text-muted">
+
+                                    <strong>Remarks:</strong>
+
+                                    {{ contribution.remarks }}
+
+                                </small>
+
+                            </td>
+
+                        </tr>
+
+                        {% endif %}
+
+                        {% endfor %}
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+            {% else %}
+
+            <div class="text-center py-5">
+
+                <h5 class="text-muted">
+
+                    No contributions have been recorded.
+
+                </h5>
+
+                <p class="text-muted">
+
+                    Once contributions are recorded they will automatically appear here.
+
+                </p>
+
+            </div>
+
+            {% endif %}
+
+        </div>
+
+    </div>
+
+
+
+    <!-- ===================================================== -->
+    <!-- FUTURE FINANCIAL MODULES -->
+    <!-- ===================================================== -->
+
+    <div class="row">
+
+        <div class="col-md-6 mb-4">
+
+            <div class="card shadow-sm border-0 h-100">
+
+                <div class="card-header bg-white">
+
+                    <h5 class="mb-0">
+
+                        Loan Portfolio
+
+                    </h5>
+
+                </div>
+
+                <div class="card-body text-center">
+
+                    <h2 class="text-primary">
+
+                        UGX {{ summary.loan.balance }}
+
+                    </h2>
+
+                    <p class="text-muted">
+
+                        Active loans, repayments, penalties and automatic
+                        savings recovery will appear here.
+
+                    </p>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="col-md-6 mb-4">
+
+            <div class="card shadow-sm border-0 h-100">
+
+                <div class="card-header bg-white">
+
+                    <h5 class="mb-0">
+
+                        Investments
+
+                    </h5>
+
+                </div>
+
+                <div class="card-body text-center">
+
+                    <h2 class="text-success">
+
+                        UGX {{ summary.investment.unit_trust }}
+
+                    </h2>
+
+                    <p class="text-muted">
+
+                        Unit Trust investments, interest earned and dividends
+                        will appear here.
+
+                    </p>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+
+    <!-- ===================================================== -->
+    <!-- QUICK ACTIONS -->
+    <!-- ===================================================== -->
+
+    <div class="card shadow-sm border-0">
+
+        <div class="card-header bg-white">
+
+            <h5 class="mb-0">
+
+                Quick Actions
+
+            </h5>
+
+        </div>
+
+        <div class="card-body">
+
+            <div class="d-flex flex-wrap gap-2">
+
+                <a href="{% url 'contributions:create' %}"
+                   class="btn btn-primary">
+
+                    Record Contribution
+
+                </a>
+
+                <button class="btn btn-outline-primary" disabled>
+
+                    Issue Loan
+
+                </button>
+
+                <button class="btn btn-outline-primary" disabled>
+
+                    Record Loan Repayment
+
+                </button>
+
+                <button class="btn btn-outline-primary" disabled>
+
+                    Download Statement
+
+                </button>
+
+                <a href="{% url 'admin:members_member_change' member.id %}"
+                   class="btn btn-outline-secondary">
+
+                    Edit Member
+
+                </a>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

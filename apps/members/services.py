@@ -12,7 +12,7 @@ must never update Member.status directly.
 """
 
 from django.db import transaction
-
+from decimal import Decimal
 from apps.auditlog.models import AuditLog
 from apps.auditlog.utils import log_action
 
@@ -32,7 +32,6 @@ def evaluate_member_status(member, cycle):
     from apps.contributions.services import member_balance
     from .models import Member
 
-    previous_status = member.status
 
     balance = member_balance(member, cycle)
 
@@ -72,3 +71,119 @@ def evaluate_member_status(member, cycle):
         )
 
     return member
+# ============================================================
+# MEMBER FINANCIAL SUMMARY
+# ============================================================
+
+def member_financial_summary(member, cycle):
+    """
+    Returns the complete financial position of a member.
+
+    This service feeds:
+
+    - Member Dashboard
+    - Member Statement
+    - Reports
+    - APIs
+    """
+
+    from apps.contributions.services import member_contribution_summary
+
+    contribution = member_contribution_summary(
+        member,
+        cycle,
+    )
+
+    # Placeholder until the Loans module is built.
+    loan = {
+        "borrowed": Decimal("0"),
+        "repaid": Decimal("0"),
+        "balance": Decimal("0"),
+    }
+
+    # Placeholder until the Investments module is built.
+    investment = {
+        "unit_trust": Decimal("0"),
+    }
+
+    total_deposits = (
+        contribution["monthly_paid"]
+        +
+        contribution["emergency_paid"]
+    )
+
+    net_position = (
+        total_deposits
+        +
+        investment["unit_trust"]
+        -
+        loan["balance"]
+    )
+
+    return {
+        "member": member,
+        "cycle": cycle,
+        "contributions": contribution,
+        "loan": loan,
+        "investment": investment,
+        "total_deposits": total_deposits,
+        "net_position": net_position,
+    }
+
+
+# ============================================================
+# MEMBER TRANSACTION HISTORY
+# ============================================================
+
+def member_transaction_history(member):
+    """
+    Returns every financial transaction belonging
+    to the member.
+
+    Initially this returns contributions only.
+
+    Later it will include:
+
+    - Loans
+    - Loan Repayments
+    - Savings Offset
+    - Unit Trust
+    - Dividends
+    """
+
+    from apps.contributions.models import Contribution
+
+    return (
+        Contribution.objects
+        .filter(member=member)
+        .select_related(
+            "cycle",
+            "recorded_by",
+        )
+        .order_by(
+            "-payment_date",
+            "-created_at",
+        )
+    )
+def member_loan_summary(member):
+    """
+    Returns the member's loan position.
+
+    Placeholder until the Loans module is built.
+    """
+    return {
+        "borrowed": Decimal("0"),
+        "repaid": Decimal("0"),
+        "balance": Decimal("0"),
+    }
+
+
+def member_investment_summary(member):
+    """
+    Returns the member's investment position.
+
+    Placeholder until the Investments module is built.
+    """
+    return {
+        "unit_trust": Decimal("0"),
+    }

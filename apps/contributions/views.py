@@ -24,6 +24,16 @@ class FinancialAccessMixin(LoginRequiredMixin):
 
     def dispatch(self, request, *args, **kwargs):
 
+        # ---------- TEMPORARY DEBUG ----------
+        print("=" * 60)
+        print("Logged in user :", request.user.username)
+        print("Role           :", request.user.role)
+        print("Authenticated  :", request.user.is_authenticated)
+        print("Has Full Access:", request.user.has_full_access)
+        print("Financial Write:", request.user.has_financial_write_access)
+        print("=" * 60)
+        # ------------------------------------
+
         if request.user.role not in (
             User.Role.ADMINISTRATOR,
             User.Role.TREASURER,
@@ -45,7 +55,6 @@ class ContributionListView(FinancialAccessMixin, ListView):
     model = Contribution
     template_name = "contributions/contribution_list.html"
     context_object_name = "contributions"
-
     paginate_by = 20
 
     def get_queryset(self):
@@ -67,9 +76,7 @@ class ContributionListView(FinancialAccessMixin, ListView):
             queryset = queryset.filter(
                 Q(member__member_code__icontains=search)
                 |
-                Q(member__first_name__icontains=search)
-                |
-                Q(member__last_name__icontains=search)
+                Q(member__full_name__icontains=search)
             )
 
         cycle = self.request.GET.get("cycle")
@@ -123,6 +130,7 @@ class ContributionListView(FinancialAccessMixin, ListView):
                 "expected": 0,
                 "collected": 0,
                 "outstanding": 0,
+                "collection_rate": 0,
             }
 
         return context
@@ -174,7 +182,10 @@ class ContributionCreateView(FinancialAccessMixin, CreateView):
 
         try:
 
-            record_contribution(contribution)
+            record_contribution(
+                contribution,
+                actor=self.request.user,
+            )
 
         except ContributionError as exc:
 
