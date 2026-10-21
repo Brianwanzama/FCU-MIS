@@ -109,6 +109,33 @@ class User(AbstractUser):
         )
 
     @property
+    def has_financial_view_access(self):
+        """View every member's financial records (contribution register)."""
+        return self.role in (
+            self.Role.ADMINISTRATOR,
+            self.Role.TREASURER,
+            self.Role.CHAIRPERSON,
+        )
+
+    @property
+    def can_edit_contributions(self):
+        """Correct an existing contribution (reason required, fully audited)."""
+        return self.has_financial_view_access
+
+    @property
+    def can_request_reversal(self):
+        """Ask for a contribution to be reversed. Needs approval to take effect."""
+        return self.has_financial_view_access
+
+    @property
+    def can_approve_reversal(self):
+        """Approve or reject a reversal request. The Treasurer cannot."""
+        return self.role in (
+            self.Role.ADMINISTRATOR,
+            self.Role.CHAIRPERSON,
+        )
+
+    @property
     def has_secretariat_access(self):
         """
         Member administration, correspondence,

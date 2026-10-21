@@ -5,6 +5,7 @@ obligations, and targets come from the cycle configuration.
 from datetime import date
 from decimal import Decimal
 
+from django.core.exceptions import PermissionDenied
 from django.template import Context, Template
 from django.test import SimpleTestCase, TestCase
 
@@ -262,7 +263,12 @@ class ArrearsSettlementTests(TestCase):
 
     def test_reversing_the_arrears_payment_makes_the_member_inactive_again(self):
         c = self.record(self.new, "100000", settles=self.old)
-        services.delete_contribution(c, actor=self.actor)
+        self.assertEqual(self.status(), Member.Status.ACTIVE)
+        chair = User.objects.create_user(
+            username="chair0", password="x", role=User.Role.CHAIRPERSON
+        )
+        r = services.request_reversal(c, self.actor, "Paid in error")
+        services.approve_reversal(r, chair)
         self.assertEqual(self.status(), Member.Status.INACTIVE)
 
     def test_arrears_payment_does_not_count_towards_the_new_cycle(self):
@@ -290,3 +296,236 @@ class ArrearsSettlementTests(TestCase):
         reassess_after_arrears_payment(self.withdrawn, self.old, actor=self.actor)
         self.withdrawn.refresh_from_db()
         self.assertEqual(self.withdrawn.status, Member.Status.WITHDRAWN)
+
+
+class EditAndReversalTests(TestCase):
+    """Editing and reversing contributions: permissions, audit trail, balances."""
+
+    @classmethod
+    def setUpTestData(cls):
+        mk = lambda name, role: User.objects.create_user(username=name, password="pw", role=role)
+        cls.admin = mk("admin", User.Role.ADMINISTRATOR)
+        cls.treasurer = mk("treasurer", User.Role.TREASURER)
+        cls.chair = mk("chair", User.Role.CHAIRPERSON)
+        cls.secretary = mk("secretary", User.Role.SECRETARY)
+        cls.plain = mk("plain", User.Role.MEMBER)
+        cls.cycle = cycle_services.create_cycle(
+            Cycle(cycle_number=1, start_date=date(2026, 1, 1), duration_months=6),
+            actor=cls.admin,
+        )
+        cycle_services.activate_cycle(cls.cycle, actor=cls.admin)
+        cls.member = Member.objects.order_by("member_code").first()
+
+    def make(self, amount="100000"):
+        return services.record_contribution(
+            Contribution(
+                member=self.member, cycle=self.cycle, contribution_type=M.MONTHLY,
+                amount=Decimal(amount), period_month=date(2026, 1, 1),
+                payment_date=date(2026, 1, 5), payment_method="CASH",
+                recorded_by=self.treasurer,
+            ),
+            actor=self.treasurer,
+        )
+
+    def paid(self):
+        return services.member_balance(self.member, self.cycle)["monthly_paid"]
+
+    # ---- permissions -------------------------------------------------
+    def test_permission_matrix(self):
+        expect = {
+            "admin": (True, True, True, True),
+            "treasurer": (True, True, True, False),
+            "chair": (True, True, True, True),
+            "secretary": (False, False, False, False),
+            "plain": (False, False, False, False),
+        }
+        for name, (view, edit, request, approve) in expect.items():
+            u = User.objects.get(username=name)
+            self.assertEqual(
+                (u.has_financial_view_access, u.can_edit_contributions,
+                 u.can_request_reversal, u.can_approve_reversal),
+                (view, edit, request, approve), name,
+            )
+
+    def test_chairperson_does_not_record_but_treasurer_does(self):
+        self.assertFalse(self.chair.has_financial_write_access)
+        self.assertTrue(self.treasurer.has_financial_write_access)
+
+    # ---- editing -----------------------------------------------------
+    def test_edit_logs_old_new_user_and_reason_and_recalculates(self):
+        c = self.make("100000")
+        old = services._snapshot(c)
+        c.amount = Decimal("80000")
+        services.update_contribution(c, old, actor=self.treasurer, reason="Typo in amount")
+        self.assertEqual(self.paid(), Decimal("80000"))
+
+        from apps.auditlog.models import AuditLog
+        e = AuditLog.objects.filter(model_name="Contribution", object_id=str(c.pk), action="UPDATE").latest("pk")
+        self.assertEqual(e.old_value["amount"], "100000.00")
+        self.assertEqual(e.new_value["amount"], "80000.00")
+        self.assertEqual(e.new_value["reason"], "Typo in amount")
+        self.assertEqual(e.actor, self.treasurer)
+        self.assertIsNotNone(e.timestamp)
+
+    def test_edit_requires_a_reason(self):
+        c = self.make()
+        with self.assertRaises(services.ContributionError):
+            services.update_contribution(c, services._snapshot(c), actor=self.treasurer, reason="  ")
+
+    def test_secretary_cannot_edit(self):
+        c = self.make()
+        with self.assertRaises(PermissionDenied):
+            services.update_contribution(c, services._snapshot(c), actor=self.secretary, reason="x")
+
+    def test_chairperson_can_edit(self):
+        c = self.make()
+        c.remarks = "checked"
+        services.update_contribution(c, services._snapshot(c), actor=self.chair, reason="Add remark")
+
+    def test_closed_cycle_contribution_cannot_be_edited(self):
+        c = self.make()
+        cycle_services.close_cycle(self.cycle, actor=self.admin)
+        c.refresh_from_db()
+        with self.assertRaises(services.ContributionError):
+            services.update_contribution(c, services._snapshot(c), actor=self.admin, reason="x")
+
+    # ---- reversal ----------------------------------------------------
+    def test_reversal_does_nothing_until_approved(self):
+        c = self.make("100000")
+        services.request_reversal(c, self.treasurer, "Duplicate entry")
+        self.assertEqual(self.paid(), Decimal("100000"))
+
+    def test_approved_reversal_removes_it_from_balances_but_keeps_the_record(self):
+        c = self.make("100000")
+        r = services.request_reversal(c, self.treasurer, "Duplicate entry")
+        services.approve_reversal(r, self.chair, "Confirmed")
+        c.refresh_from_db()
+        self.assertTrue(c.is_reversed)
+        self.assertEqual(self.paid(), Decimal("0"))
+        self.assertTrue(Contribution.objects.filter(pk=c.pk).exists())
+        self.assertEqual(services.cycle_contribution_summary(self.cycle)["collected"], Decimal("0"))
+
+    def test_reversal_is_recoverable_in_the_audit_history(self):
+        from apps.auditlog.models import AuditLog
+
+        c = self.make("100000")
+        r = services.request_reversal(c, self.treasurer, "Duplicate entry")
+        services.approve_reversal(r, self.admin)
+        events = [
+            e.new_value.get("event")
+            for e in AuditLog.objects.filter(model_name="Contribution", object_id=str(c.pk))
+        ]
+        self.assertIn("REVERSAL_REQUESTED", events)
+        self.assertIn("CONTRIBUTION_REVERSED", events)
+        reversed_entry = AuditLog.objects.filter(
+            new_value__event="CONTRIBUTION_REVERSED", object_id=str(c.pk)
+        ).get()
+        self.assertEqual(reversed_entry.old_value["amount"], "100000.00")  # original kept
+
+    def test_treasurer_cannot_approve(self):
+        c = self.make()
+        r = services.request_reversal(c, self.treasurer, "x")
+        with self.assertRaises(PermissionDenied):
+            services.approve_reversal(r, self.treasurer)
+
+    def test_requester_cannot_approve_their_own_request(self):
+        c = self.make()
+        r = services.request_reversal(c, self.admin, "x")
+        with self.assertRaises(services.ContributionError):
+            services.approve_reversal(r, self.admin)
+
+    def test_rejected_reversal_leaves_the_payment_and_allows_editing_again(self):
+        c = self.make("100000")
+        r = services.request_reversal(c, self.treasurer, "x")
+        services.reject_reversal(r, self.chair, "Payment is genuine")
+        self.assertEqual(self.paid(), Decimal("100000"))
+        c.amount = Decimal("90000")
+        services.update_contribution(c, services._snapshot(c), actor=self.treasurer, reason="ok")
+
+    def test_rejecting_needs_a_note(self):
+        c = self.make()
+        r = services.request_reversal(c, self.treasurer, "x")
+        with self.assertRaises(services.ContributionError):
+            services.reject_reversal(r, self.chair, "")
+
+    def test_no_second_request_or_edit_while_pending(self):
+        c = self.make()
+        services.request_reversal(c, self.treasurer, "x")
+        with self.assertRaises(services.ContributionError):
+            services.request_reversal(c, self.chair, "again")
+        with self.assertRaises(services.ContributionError):
+            services.update_contribution(c, services._snapshot(c), actor=self.treasurer, reason="x")
+
+    def test_a_decided_request_cannot_be_decided_twice(self):
+        c = self.make()
+        r = services.request_reversal(c, self.treasurer, "x")
+        services.approve_reversal(r, self.chair)
+        with self.assertRaises(services.ContributionError):
+            services.approve_reversal(r, self.admin)
+
+    def test_reversal_requires_a_reason(self):
+        c = self.make()
+        with self.assertRaises(services.ContributionError):
+            services.request_reversal(c, self.treasurer, "")
+
+    # ---- through the web interface -------------------------------------
+    def test_views_enforce_roles(self):
+        c = self.make()
+        urls = [
+            f"/contributions/{c.pk}/",
+            f"/contributions/{c.pk}/edit/",
+            f"/contributions/{c.pk}/reverse/",
+            "/contributions/reversals/",
+        ]
+        for name, allowed in [("chair", True), ("treasurer", True), ("secretary", False), ("plain", False)]:
+            self.client.logout()
+            self.client.login(username=name, password="pw")
+            for url in urls:
+                code = self.client.get(url).status_code
+                self.assertEqual(code, 200 if allowed else 302, (name, url, code))
+
+    def test_only_writers_can_open_the_record_form(self):
+        self.client.login(username="chair", password="pw")
+        self.assertEqual(self.client.get("/contributions/new/").status_code, 302)
+        self.client.login(username="treasurer", password="pw")
+        self.assertEqual(self.client.get("/contributions/new/").status_code, 200)
+
+    def test_edit_through_the_form_requires_a_reason_and_saves(self):
+        c = self.make("100000")
+        self.client.login(username="treasurer", password="pw")
+        data = {
+            "amount": "80000", "period_month": "2026-01-01", "payment_date": "2026-01-05",
+            "payment_method": "CASH", "reference": "", "remarks": "", "reason": "",
+        }
+        r = self.client.post(f"/contributions/{c.pk}/edit/", data)
+        self.assertEqual(r.status_code, 200)  # form re-shown with an error
+        data["reason"] = "Typo"
+        r = self.client.post(f"/contributions/{c.pk}/edit/", data)
+        self.assertEqual(r.status_code, 302)
+        c.refresh_from_db()
+        self.assertEqual(c.amount, Decimal("80000"))
+
+    def test_reversal_flow_through_the_views(self):
+        c = self.make("100000")
+        self.client.login(username="treasurer", password="pw")
+        self.client.post(f"/contributions/{c.pk}/reverse/", {"reason": "Duplicate"})
+        rev = c.reversals.get()
+        # the Treasurer cannot approve
+        self.client.post(f"/contributions/reversals/{rev.pk}/approve/")
+        rev.refresh_from_db()
+        self.assertEqual(rev.status, "PENDING")
+        # the Chairperson can
+        self.client.login(username="chair", password="pw")
+        self.client.post(f"/contributions/reversals/{rev.pk}/approve/", {"note": "ok"})
+        rev.refresh_from_db()
+        self.assertEqual(rev.status, "APPROVED")
+        c.refresh_from_db()
+        self.assertTrue(c.is_reversed)
+
+    def test_decision_views_reject_get_requests(self):
+        c = self.make()
+        rev = services.request_reversal(c, self.treasurer, "x")
+        self.client.login(username="chair", password="pw")
+        self.assertEqual(
+            self.client.get(f"/contributions/reversals/{rev.pk}/approve/").status_code, 405
+        )

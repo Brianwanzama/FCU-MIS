@@ -30,6 +30,7 @@ def dashboard(request):
         "summary": summary,
         "recent_contributions": (
             Contribution.objects
+            .filter(reversed_at__isnull=True)
             .select_related(
                 "member",
                 "recorded_by",

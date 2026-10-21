@@ -175,6 +175,17 @@ class Contribution(models.Model):
         help_text="The Treasurer or Administrator who entered this row (Manual §10.1).",
     )
 
+    reversed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        editable=False,
+        help_text=(
+            "Set when an approved reversal cancels this payment. The row is "
+            "never deleted: it stays in the register and the audit history, but "
+            "no longer counts towards any balance."
+        ),
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -207,6 +218,16 @@ class Contribution(models.Model):
             f"{self.get_contribution_type_display()} - "
             f"UGX {self.amount:,.0f}"
         )
+    @property
+    def is_reversed(self) -> bool:
+        return self.reversed_at is not None
+
+    @property
+    def pending_reversal(self):
+        return self.reversals.filter(
+            status=ContributionReversal.Status.PENDING
+        ).first()
+
     @property
     def is_monthly(self) -> bool:
         """
@@ -317,3 +338,60 @@ class Contribution(models.Model):
 
         if errors:
             raise ValidationError(errors)
+
+
+
+class ContributionReversal(models.Model):
+    """
+    A request to reverse (cancel) a contribution.
+
+    Financial records are never deleted. A reversal is requested with a reason,
+    then approved or rejected by the Administrator or Chairperson (never by the
+    person who asked). Only an approved reversal takes the payment out of the
+    balances, and every step is written to the audit log.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending approval"
+        APPROVED = "APPROVED", "Approved"
+        REJECTED = "REJECTED", "Rejected"
+
+    contribution = models.ForeignKey(
+        Contribution,
+        on_delete=models.PROTECT,
+        related_name="reversals",
+    )
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    reason = models.TextField(help_text="Why this payment should be reversed.")
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="contribution_reversals_requested",
+    )
+    requested_at = models.DateTimeField(auto_now_add=True)
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="contribution_reversals_decided",
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decision_note = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-requested_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["contribution"],
+                condition=models.Q(status="PENDING"),
+                name="one_pending_reversal_per_contribution",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"Reversal of {self.contribution} ({self.get_status_display()})"

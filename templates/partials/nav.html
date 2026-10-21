@@ -52,6 +52,10 @@
                     </a>
                 </li>
 
+                {% endif %}
+
+                {% if user.has_financial_view_access %}
+
                 <li class="nav-item">
                     <a class="nav-link"
                        href="{% url 'contributions:list' %}">

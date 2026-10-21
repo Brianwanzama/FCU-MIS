@@ -82,6 +82,27 @@ is recommended before Phase 2 — flag if you'd like that added now rather than 
   previous contributions. Recovery may use all of the member's previous deposits
   (across cycles); emergency contributions are excluded and protected.
 
+## Editing and reversing contributions
+
+| Action | Administrator | Treasurer | Chairperson | Member |
+| --- | --- | --- | --- | --- |
+| View all contributions | yes | yes | yes | no |
+| Record contributions | yes | yes | no | no |
+| Edit (reason required) | yes | yes | yes | no |
+| Request a reversal | yes | yes | yes | no |
+| Approve / reject a reversal | yes | no | yes | no |
+
+- Financial records are never deleted (Django admin delete is disabled too). A
+  reversal is requested with a reason and takes effect only when someone *other than
+  the requester* approves it. The payment then stops counting towards balances but
+  stays in the register and the audit history.
+- Every edit records old value, new value, user, time and reason; balances recalculate.
+- Contributions in a closed cycle cannot be edited or reversed until an Administrator
+  reopens the cycle. A payment with a reversal pending cannot be edited.
+- Pages: `/contributions/<id>/` (detail + history), `/contributions/<id>/edit/`,
+  `/contributions/<id>/reverse/`, `/contributions/reversals/`.
+- Run `python manage.py migrate` after pulling: this adds migration `0003`.
+
 ## Next phase
 
 The SRS was revised to v1.1 (General Ledger, Financial Position, Cycle Locking,

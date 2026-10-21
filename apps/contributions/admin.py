@@ -74,6 +74,10 @@ class ContributionAdmin(admin.ModelAdmin):
 
     date_hierarchy = "payment_date"
 
+    def has_delete_permission(self, request, obj=None):
+        # Financial records are never deleted: use an approved reversal.
+        return False
+
     ordering = (
         "-payment_date",
         "-created_at",

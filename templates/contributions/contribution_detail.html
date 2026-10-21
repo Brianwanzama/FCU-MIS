@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Contribution {{ contribution.pk }}{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb small">
+    <li class="breadcrumb-item"><a href="{% url 'contributions:list' %}">Contributions</a></li>
+    <li class="breadcrumb-item active" aria-current="page">#{{ contribution.pk }}</li>
+  </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-start mb-4">
+  <div>
+    <h1 class="mb-1">{{ contribution.amount|ugx }}</h1>
+    <div class="text-muted">
+      {{ contribution.member.member_code }} &middot; {{ contribution.member.full_name }}
+      &middot; {{ contribution.get_contribution_type_display }}
+    </div>
+  </div>
+  <div class="d-flex gap-2">
+    {% if contribution.is_reversed %}
+      <span class="badge text-bg-secondary fs-6">Reversed</span>
+    {% elif pending_reversal %}
+      <span class="badge text-bg-warning fs-6">Reversal pending</span>
+    {% endif %}
+    {% if is_changeable %}
+      {% if user.can_edit_contributions %}
+        <a href="{% url 'contributions:edit' contribution.pk %}" class="btn btn-outline-warning">Edit</a>
+      {% endif %}
+      {% if user.can_request_reversal %}
+        <a href="{% url 'contributions:reverse' contribution.pk %}" class="btn btn-outline-danger">Reverse</a>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+
+{% if pending_reversal %}
+  <div class="alert alert-warning">
+    <strong>Reversal requested</strong> by {{ pending_reversal.requested_by }}
+    on {{ pending_reversal.requested_at|date:"d M Y H:i" }}.<br>
+    Reason: {{ pending_reversal.reason }}
+    {% if user.can_approve_reversal and pending_reversal.requested_by_id != user.pk %}
+      <form method="post" class="mt-3" action="{% url 'contributions:reversal_decision' pending_reversal.pk 'approve' %}">
+        {% csrf_token %}
+        <input type="text" name="note" class="form-control mb-2" placeholder="Note (required to reject)">
+        <button class="btn btn-danger btn-sm" type="submit">Approve reversal</button>
+        <button class="btn btn-outline-secondary btn-sm" type="submit"
+                formaction="{% url 'contributions:reversal_decision' pending_reversal.pk 'reject' %}">Reject</button>
+      </form>
+    {% elif user.can_approve_reversal %}
+      <div class="small mt-2">You requested this, so someone else must approve it.</div>
+    {% endif %}
+  </div>
+{% endif %}
+
+{% if contribution.is_reversed %}
+  <div class="alert alert-secondary">
+    This payment was reversed on {{ contribution.reversed_at|date:"d M Y H:i" }}.
+    It no longer counts towards any balance but remains in the history below.
+  </div>
+{% elif contribution.cycle.is_locked %}
+  <div class="alert alert-light border">
+    This payment belongs to a closed cycle. An Administrator must reopen the cycle before it can be changed.
+  </div>
+{% endif %}
+
+<div class="row g-4">
+  <div class="col-lg-5">
+    <div class="card fcu-card">
+      <div class="card-header">Details</div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-5">Cycle</dt><dd class="col-7">{{ contribution.cycle }}</dd>
+          {% if contribution.settles_cycle %}
+            <dt class="col-5">Settles arrears of</dt><dd class="col-7">{{ contribution.settles_cycle }}</dd>
+          {% endif %}
+          <dt class="col-5">For month</dt><dd class="col-7">{{ contribution.period_month|date:"F Y" }}</dd>
+          <dt class="col-5">Paid on</dt><dd class="col-7">{{ contribution.payment_date|date:"d M Y" }}</dd>
+          <dt class="col-5">Method</dt><dd class="col-7">{{ contribution.get_payment_method_display }}</dd>
+          <dt class="col-5">Reference</dt><dd class="col-7">{{ contribution.reference|default:"—" }}</dd>
+          <dt class="col-5">Remarks</dt><dd class="col-7">{{ contribution.remarks|default:"—" }}</dd>
+          <dt class="col-5">Recorded by</dt><dd class="col-7">{{ contribution.recorded_by }}</dd>
+          <dt class="col-5">Recorded at</dt><dd class="col-7">{{ contribution.created_at|date:"d M Y H:i" }}</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-7">
+    <div class="card fcu-card">
+      <div class="card-header">History</div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0 align-middle">
+          <thead><tr><th>When</th><th>Who</th><th>What</th></tr></thead>
+          <tbody>
+          {% for entry in history %}
+            <tr>
+              <td class="text-nowrap small">{{ entry.timestamp|date:"d M Y H:i" }}</td>
+              <td class="small">{{ entry.actor|default:"system" }}</td>
+              <td class="small">
+                <strong>{% firstof entry.new_value.event entry.action %}</strong>
+                {% if entry.new_value.reason %}<div>Reason: {{ entry.new_value.reason }}</div>{% endif %}
+                {% if entry.new_value.note %}<div>Note: {{ entry.new_value.note }}</div>{% endif %}
+                {% if entry.action == "UPDATE" and entry.old_value and not entry.new_value.event %}
+                  <div class="text-muted">
+                    Amount {{ entry.old_value.amount }} &rarr; {{ entry.new_value.amount }};
+                    paid {{ entry.old_value.payment_date }} &rarr; {{ entry.new_value.payment_date }};
+                    month {{ entry.old_value.period_month }} &rarr; {{ entry.new_value.period_month }}
+                  </div>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="3" class="text-muted text-center py-3">No history recorded.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,7 +1,8 @@
 """
 Contribution business services.
 
-Every financial transaction passes through this module.
+Every financial transaction passes through this module. Financial records are
+never deleted: mistakes are corrected by audited edits or approved reversals.
 
 Responsibilities
 ----------------
@@ -15,15 +16,16 @@ Responsibilities
 
 from decimal import Decimal
 from apps.cycles.services import get_active_cycle
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import Q, Sum
+from django.utils import timezone
 
 from apps.auditlog.models import AuditLog
 from apps.auditlog.utils import log_action
 
 
-from .models import Contribution
+from .models import Contribution, ContributionReversal
 
 
 class ContributionError(ValidationError):
@@ -64,15 +66,22 @@ def record_contribution(contribution, actor=None):
 # ============================================================
 
 @transaction.atomic
-def update_contribution(contribution, old_snapshot, actor=None):
+def update_contribution(contribution, old_snapshot, actor=None, reason=""):
     """
-    Update an existing contribution.
+    Correct an existing contribution.
+
+    Needs a written reason. The audit log keeps the old value, the new value,
+    who changed it, when, and why. Reversed payments, payments with a reversal
+    pending, and payments in a closed cycle cannot be edited.
     """
 
-    if contribution.cycle.is_locked:
-        raise ContributionError(
-            "Contributions belonging to a closed cycle cannot be edited."
-        )
+    _require(actor, "can_edit_contributions", "edit contributions")
+    _require_editable(contribution)
+
+    reason = (reason or "").strip()
+
+    if not reason:
+        raise ContributionError("A reason is required to change a contribution.")
 
     contribution.full_clean()
     _validate_arrears_amount(contribution)
@@ -83,59 +92,131 @@ def update_contribution(contribution, old_snapshot, actor=None):
         instance=contribution,
         actor=actor,
         old_value=old_snapshot,
-        new_value=_snapshot(contribution),
+        new_value={**_snapshot(contribution), "reason": reason},
     )
 
     _reassess_arrears(contribution.member, contribution.settles_cycle, actor)
-
-    old_settled_id = (old_snapshot or {}).get("settles_cycle_id")
-
-    if old_settled_id and old_settled_id != contribution.settles_cycle_id:
-        from apps.cycles.models import Cycle
-
-        _reassess_arrears(
-            contribution.member, Cycle.objects.filter(pk=old_settled_id).first(), actor
-        )
 
     return contribution
 
 
 # ============================================================
-# DELETE
+# REVERSAL (replaces deletion)
 # ============================================================
 
 @transaction.atomic
-def delete_contribution(contribution, actor=None):
+def request_reversal(contribution, actor, reason):
     """
-    Delete a contribution.
+    Ask for a contribution to be reversed. Nothing changes until it is approved.
     """
 
-    if contribution.cycle.is_locked:
+    _require(actor, "can_request_reversal", "request a reversal")
+    _require_editable(contribution, action="reversed")
+
+    reason = (reason or "").strip()
+
+    if not reason:
+        raise ContributionError("A reason is required to request a reversal.")
+
+    reversal = ContributionReversal.objects.create(
+        contribution=contribution,
+        reason=reason,
+        requested_by=actor,
+    )
+
+    log_action(
+        AuditLog.Action.UPDATE,
+        instance=contribution,
+        actor=actor,
+        new_value={
+            "event": "REVERSAL_REQUESTED",
+            "reversal_id": reversal.pk,
+            "reason": reason,
+        },
+    )
+
+    return reversal
+
+
+@transaction.atomic
+def approve_reversal(reversal, actor, note=""):
+    """
+    Approve a reversal. The payment stops counting towards any balance but is
+    kept, with its full history, in the register and the audit log.
+    """
+
+    _require(actor, "can_approve_reversal", "approve reversals")
+    _require_pending(reversal)
+
+    if reversal.requested_by_id == actor.pk:
         raise ContributionError(
-            "Contributions belonging to a closed cycle cannot be deleted."
+            "A reversal must be approved by someone other than the person who "
+            "requested it."
         )
 
-    snapshot = _snapshot(contribution)
-    repr_ = str(contribution)
-    pk = contribution.pk
-    member = contribution.member
-    settled_cycle = contribution.settles_cycle
+    contribution = reversal.contribution
+    now = timezone.now()
 
-    contribution.delete()
+    snapshot = _snapshot(contribution)
+
+    Contribution.objects.filter(pk=contribution.pk).update(reversed_at=now)
+    contribution.reversed_at = now
+
+    reversal.status = ContributionReversal.Status.APPROVED
+    reversal.decided_by = actor
+    reversal.decided_at = now
+    reversal.decision_note = (note or "").strip()
+    reversal.save()
 
     log_action(
         AuditLog.Action.DELETE,
+        instance=contribution,
         actor=actor,
-        model_name="Contribution",
-        object_id=str(pk),
-        object_repr=repr_,
         old_value=snapshot,
-        new_value={"event": "CONTRIBUTION_DELETED"},
+        new_value={
+            "event": "CONTRIBUTION_REVERSED",
+            "reversal_id": reversal.pk,
+            "requested_by": reversal.requested_by.get_username(),
+            "reason": reversal.reason,
+            "note": reversal.decision_note,
+        },
     )
 
-    _reassess_arrears(member, settled_cycle, actor)
+    _reassess_arrears(contribution.member, contribution.settles_cycle, actor)
 
-    return repr_
+    return reversal
+
+
+@transaction.atomic
+def reject_reversal(reversal, actor, note):
+    """Reject a reversal request. The payment stays exactly as it was."""
+
+    _require(actor, "can_approve_reversal", "reject reversals")
+    _require_pending(reversal)
+
+    note = (note or "").strip()
+
+    if not note:
+        raise ContributionError("A note is required to reject a reversal request.")
+
+    reversal.status = ContributionReversal.Status.REJECTED
+    reversal.decided_by = actor
+    reversal.decided_at = timezone.now()
+    reversal.decision_note = note
+    reversal.save()
+
+    log_action(
+        AuditLog.Action.UPDATE,
+        instance=reversal.contribution,
+        actor=actor,
+        new_value={
+            "event": "REVERSAL_REJECTED",
+            "reversal_id": reversal.pk,
+            "note": note,
+        },
+    )
+
+    return reversal
 
 
 # ============================================================
@@ -259,6 +340,7 @@ def cycle_contribution_summary(cycle):
             Contribution.objects.filter(
                 cycle=cycle,
                 settles_cycle__isnull=True,
+                reversed_at__isnull=True,
                 contribution_type=contribution_type,
             ).aggregate(total=Sum("amount"))["total"]
             or Decimal("0")
@@ -295,6 +377,33 @@ def cycle_contribution_summary(cycle):
 # HELPERS
 # ============================================================
 
+def _require(actor, permission, action):
+    if actor is None or not getattr(actor, permission, False):
+        raise PermissionDenied(f"You do not have permission to {action}.")
+
+
+def _require_editable(contribution, action="edited"):
+    if contribution.is_reversed:
+        raise ContributionError("This contribution has been reversed.")
+
+    if contribution.pending_reversal:
+        raise ContributionError(
+            f"This contribution has a reversal pending, so it cannot be {action} "
+            f"again until that request is decided."
+        )
+
+    if contribution.cycle.is_locked:
+        raise ContributionError(
+            "Contributions belonging to a closed cycle cannot be changed. "
+            "An Administrator must reopen the cycle first."
+        )
+
+
+def _require_pending(reversal):
+    if reversal.status != ContributionReversal.Status.PENDING:
+        raise ContributionError("This reversal request has already been decided.")
+
+
 def cycle_payments(cycle):
     """
     Every payment that counts towards `cycle`: those recorded in it, except
@@ -304,7 +413,8 @@ def cycle_payments(cycle):
 
     return Contribution.objects.filter(
         Q(cycle=cycle, settles_cycle__isnull=True)
-        | Q(settles_cycle=cycle)
+        | Q(settles_cycle=cycle),
+        reversed_at__isnull=True,
     )
 
 
@@ -322,9 +432,9 @@ def _validate_arrears_amount(contribution):
     balance = member_contribution_summary(contribution.member, settled)["monthly_balance"]
 
     if contribution.pk:
-        previous = Contribution.objects.filter(pk=contribution.pk).values_list(
-            "amount", "settles_cycle_id"
-        ).first()
+        previous = Contribution.objects.filter(
+            pk=contribution.pk, reversed_at__isnull=True
+        ).values_list("amount", "settles_cycle_id").first()
         if previous and previous[1] == settled.pk:
             balance += previous[0]
 
@@ -386,7 +496,7 @@ def _snapshot(contribution):
             str(contribution.settles_cycle) if contribution.settles_cycle_id else None
         ),
         "settles_cycle_id": contribution.settles_cycle_id,
-        "amount": str(contribution.amount),
+        "amount": str(Decimal(contribution.amount).quantize(Decimal("0.01"))),
         "period_month": (
             contribution.period_month.isoformat()
             if contribution.period_month
