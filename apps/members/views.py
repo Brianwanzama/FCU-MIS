@@ -149,3 +149,28 @@ class MemberStatementPDFView(MemberFinanceAccessMixin, View):
         )
 
         return response
+
+
+class MemberStatementExcelView(MemberFinanceAccessMixin, View):
+    """Download the statement as an Excel workbook."""
+
+    def get(self, request, member_code):
+
+        from apps.reports.excel import statement_workbook
+
+        member = self.get_member()
+        cycle = self.selected_cycle()
+
+        if cycle is None:
+            messages.info(request, "There is no cycle to produce a statement for yet.")
+            return redirect("members:detail", member_code=member.member_code)
+
+        response = HttpResponse(
+            statement_workbook(member_statement(member, cycle)),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = (
+            f'attachment; filename="FCU-statement-{member.member_code}-cycle-{cycle.cycle_number}.xlsx"'
+        )
+
+        return response

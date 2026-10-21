@@ -3,6 +3,7 @@ from django.urls import path
 from .views import (
     MemberDetailView,
     MemberListView,
+    MemberStatementExcelView,
     MemberStatementPDFView,
     MemberStatementView,
     MyFinancesView,
@@ -15,5 +16,6 @@ urlpatterns = [
     path("me/", MyFinancesView.as_view(), name="mine"),
     path("<slug:member_code>/statement/", MemberStatementView.as_view(), name="statement"),
     path("<slug:member_code>/statement.pdf", MemberStatementPDFView.as_view(), name="statement_pdf"),
+    path("<slug:member_code>/statement.xlsx", MemberStatementExcelView.as_view(), name="statement_excel"),
     path("<slug:member_code>/", MemberDetailView.as_view(), name="detail"),
 ]

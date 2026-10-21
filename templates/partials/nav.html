@@ -43,6 +43,15 @@
                     </a>
                 </li>
 
+                {% if user.has_financial_view_access %}
+                <li class="nav-item">
+                    <a class="nav-link"
+                       href="{% url 'reports:index' %}">
+                        Reports
+                    </a>
+                </li>
+                {% endif %}
+
                 <li class="nav-item">
                     <a class="nav-link"
                        href="{% url 'documents:library' %}">

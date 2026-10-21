@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Report: Cycle {{ cycle.cycle_number }}{% endblock %}
+
+{% block content %}
+<style>@media print { .navbar-fcu, .no-print, footer { display: none !important; } .fcu-card { border: 0 !important; box-shadow: none !important; } }</style>
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3 no-print">
+  <nav aria-label="breadcrumb"><ol class="breadcrumb small mb-0">
+    <li class="breadcrumb-item"><a href="{% url 'reports:index' %}">Reports</a></li>
+    <li class="breadcrumb-item active">Cycle {{ cycle.cycle_number }}</li></ol></nav>
+  <div class="d-flex gap-2">
+    <a class="btn btn-fcu-primary btn-sm" href="{% url 'reports:cycle_pdf' cycle.pk %}">Download PDF</a>
+    <a class="btn btn-outline-secondary btn-sm" href="{% url 'reports:cycle_excel' cycle.pk %}">Excel</a>
+    <button class="btn btn-outline-secondary btn-sm" onclick="window.print()">Print</button>
+  </div>
+</div>
+
+<h1 class="mb-1">Financial report</h1>
+<p class="text-muted">Cycle {{ cycle.cycle_number }} &middot; {{ cycle.name }} ({{ cycle.start_date|date:"d M Y" }} &ndash; {{ cycle.end_date|date:"d M Y" }}) &middot; {{ cycle.get_status_display }}<br>Prepared {{ report.generated_at|date:"d M Y H:i" }}</p>
+
+{% with c=report.contributions loans=report.loans inv=report.investments pos=report.position %}
+
+<h2 class="h5">1. Contributions</h2>
+<div class="card fcu-card mb-4"><div class="table-responsive"><table class="table mb-0">
+  <thead><tr><th></th><th class="text-end">Target</th><th class="text-end">Collected</th><th class="text-end">Outstanding</th><th class="text-end">Rate</th></tr></thead>
+  <tbody>
+    <tr><th>Deposits</th><td class="text-end">{{ c.expected|ugx }}</td><td class="text-end">{{ c.collected|ugx }}</td><td class="text-end">{{ c.outstanding|ugx }}</td><td class="text-end">{{ c.collection_rate }}%</td></tr>
+    <tr><th>Emergency</th><td class="text-end">{{ c.emergency_expected|ugx }}</td><td class="text-end">{{ c.emergency_collected|ugx }}</td><td class="text-end">{{ c.emergency_outstanding|ugx }}</td><td class="text-end">{{ c.emergency_collection_rate }}%</td></tr>
+  </tbody></table></div>
+  <div class="card-body small text-muted border-top">{{ c.members_met_target }} of {{ c.members }} members met their deposit target. Eligible members in this cycle: {{ c.eligible_members }}.</div>
+</div>
+
+<h2 class="h5">2. Loans disbursed in this cycle</h2>
+<div class="card fcu-card mb-4"><div class="table-responsive"><table class="table mb-0">
+  <thead><tr><th class="text-end">Loans</th><th class="text-end">Disbursed</th><th class="text-end">Repayments</th><th class="text-end">Recovered from savings</th><th class="text-end">Interest earned</th><th class="text-end">Outstanding</th></tr></thead>
+  <tbody><tr><td class="text-end">{{ loans.count }}</td><td class="text-end">{{ loans.disbursed|ugx }}</td><td class="text-end">{{ loans.repayments_received|ugx }}</td><td class="text-end">{{ loans.recovered_from_savings|ugx }}</td><td class="text-end">{{ loans.interest_earned|ugx }}</td><td class="text-end">{{ loans.outstanding|ugx }}</td></tr></tbody>
+</table></div></div>
+
+<h2 class="h5">3. Investments</h2>
+<div class="card fcu-card mb-4"><div class="table-responsive"><table class="table mb-0">
+  <thead><tr><th>Investment</th><th>Type</th><th class="text-end">Invested</th><th class="text-end">Earnings</th><th class="text-end">Worth now</th><th class="text-end">Total return</th></tr></thead>
+  <tbody>
+  {% for p in inv.positions %}<tr><td>{{ p.investment.name }}</td><td>{{ p.investment.get_kind_display }}</td><td class="text-end">{{ p.invested|ugx }}</td><td class="text-end">{{ p.income|ugx }}</td><td class="text-end">{{ p.market_value|ugx }}</td><td class="text-end">{{ p.total_return|ugx }}</td></tr>
+  {% empty %}<tr><td colspan="6" class="text-center text-muted">No investments recorded.</td></tr>{% endfor %}
+  </tbody></table></div>
+  <div class="card-body small text-muted border-top">This cycle: invested {{ inv.invested_in_cycle|ugx }}; earnings {{ inv.income_in_cycle|ugx }}; profit shared with members {{ inv.distributed|ugx }}.</div>
+</div>
+
+<h2 class="h5">4. Financial position (as of now)</h2>
+<div class="card fcu-card mb-4"><div class="table-responsive"><table class="table mb-0">
+  <thead><tr><th class="text-end">Members' deposits</th><th class="text-end">Emergency fund</th><th class="text-end">Loans receivable</th><th class="text-end">Investments</th><th class="text-end">Derived cash*</th></tr></thead>
+  <tbody><tr><td class="text-end">{{ pos.members_deposits|ugx }}</td><td class="text-end">{{ pos.emergency_fund|ugx }}</td><td class="text-end">{{ pos.loans_receivable|ugx }}</td><td class="text-end">{{ pos.investments|ugx }}</td><td class="text-end">{{ pos.derived_cash|ugx }}</td></tr></tbody>
+</table></div>
+  <div class="card-body small text-muted border-top">*Worked out from every recorded movement of money. Expenses and membership fees are not recorded in the system yet, so check this against the bank and cash balances.</div>
+</div>
+
+<h2 class="h5">5. Members</h2>
+<div class="card fcu-card"><div class="table-responsive"><table class="table table-sm align-middle mb-0">
+  <thead><tr><th>Member</th><th>Status</th><th class="text-end">Deposit target</th><th class="text-end">Paid</th><th class="text-end">Recovered</th><th class="text-end">Outstanding</th><th class="text-end">Emergency paid</th><th>Target</th></tr></thead>
+  <tbody>
+  {% for r in report.members %}
+    <tr><td>{{ r.member.member_code }} &middot; {{ r.member.full_name }}</td><td>{{ r.status }}</td>
+      <td class="text-end">{{ r.deposit_target|ugx }}</td><td class="text-end">{{ r.deposits_paid|ugx }}</td><td class="text-end">{{ r.recovered|ugx }}</td>
+      <td class="text-end">{{ r.deposits_outstanding|ugx }}</td><td class="text-end">{{ r.emergency_paid|ugx }}</td>
+      <td>{% if r.target_met %}<span class="badge text-bg-success">Met</span>{% else %}<span class="badge text-bg-warning">Not met</span>{% endif %}</td></tr>
+  {% endfor %}
+  </tbody></table></div></div>
+{% endwith %}
+{% endblock %}

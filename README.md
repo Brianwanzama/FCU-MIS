@@ -224,6 +224,21 @@ Run `python manage.py migrate`: adds `loans.0001` and `contributions.0004`.
   of the investments is shown for information but not added (it is funded by the deposits).
 - Run `python manage.py migrate`: adds `unittrust.0001`.
 
+## Reports and Excel exports (Manual 10.2)
+
+`/reports/` ("Reports" in the menu) for the Administrator, Treasurer and Chairperson.
+A cycle is six months, so each cycle's report is the **bi-annual report**: contributions
+(deposits and emergency against target), a row per member, loans disbursed in the cycle
+(repaid, recovered, interest earned, outstanding), investments and profit shared, and the
+financial position. View it, print it, or download **PDF** or **Excel** (Summary, Members,
+Loans, Investments sheets). Also exportable to Excel: all contributions (filter by cycle),
+loans with repayments, investments with transactions, and each member's statement.
+
+- Excel text is protected against formula injection (`=`, `+`, `-`, `@` are kept as text).
+- **Derived cash** is worked out from every recorded movement of money. Expenses and
+  membership fees are not recorded yet, so check it against the bank and cash balances.
+- Interest earned counts what is paid as interest first within each instalment.
+
 ## Next phase
 
 The SRS was revised to v1.1 (General Ledger, Financial Position, Cycle Locking,

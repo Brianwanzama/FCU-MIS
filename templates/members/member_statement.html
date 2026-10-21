@@ -21,6 +21,8 @@
   <div class="d-flex gap-2">
     <a class="btn btn-fcu-primary btn-sm"
        href="{% url 'members:statement_pdf' member.member_code %}?cycle={{ statement.cycle.pk }}">Download PDF</a>
+    <a class="btn btn-outline-secondary btn-sm"
+       href="{% url 'members:statement_excel' member.member_code %}?cycle={{ statement.cycle.pk }}">Excel</a>
     <button class="btn btn-outline-secondary btn-sm" onclick="window.print()">Print</button>
   </div>
   {% endif %}
