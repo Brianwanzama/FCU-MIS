@@ -75,3 +75,27 @@ class PreflightTests(TestCase):
         self.assertIn("recovery is OFF", self.run_preflight()[1])
         with override_settings(FCU_LOAN_AUTO_RECOVERY_ENABLED=True):
             self.assertIn("recovery is ON", self.run_preflight()[1])
+
+
+class SeedDemoTests(TestCase):
+    def test_refuses_without_debug_unless_forced(self):
+        with self.assertRaises(CommandError):
+            call_command("seed_demo", stdout=StringIO())
+        self.assertEqual(User.objects.count(), 0)
+
+    def test_creates_one_account_per_role_and_sample_data(self):
+        from apps.contributions.models import Contribution
+        from apps.cycles.models import Cycle
+
+        call_command("seed_demo", "--force", stdout=StringIO())
+        roles = set(User.objects.values_list("role", flat=True))
+        self.assertEqual(roles, {"ADMINISTRATOR", "TREASURER", "CHAIRPERSON", "SECRETARY", "MEMBER"})
+        self.assertTrue(Cycle.objects.filter(status="ACTIVE").exists())
+        self.assertTrue(Contribution.objects.exists())
+        self.assertTrue(self.client.login(username="demo_member", password="Demo-pass-2026!"))
+
+    def test_running_twice_changes_nothing(self):
+        call_command("seed_demo", "--force", stdout=StringIO())
+        counts = (User.objects.count(),)
+        call_command("seed_demo", "--force", stdout=StringIO())
+        self.assertEqual((User.objects.count(),), counts)

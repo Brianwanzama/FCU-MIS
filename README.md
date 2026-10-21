@@ -239,6 +239,10 @@ loans with repayments, investments with transactions, and each member's statemen
   membership fees are not recorded yet, so check it against the bank and cash balances.
 - Interest earned counts what is paid as interest first within each instalment.
 
+## Trying it out
+
+See **docs/TESTING.md**: run it on your computer, load demo logins with `python manage.py seed_demo`, and a walkthrough per role.
+
 ## Deployment
 
 See **docs/DEPLOYMENT.md** (Railway setup, variables, first deployment, backups, enabling loan
