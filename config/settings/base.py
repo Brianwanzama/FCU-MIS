@@ -66,7 +66,7 @@ LOCAL_APPS = [
     "apps.contributions",
 
     # Future modules (not yet implemented)
-    # "apps.loans",
+    "apps.loans",
     # "apps.repayments",
     # "apps.unittrust",
     # "apps.emergencyfund",
@@ -222,17 +222,18 @@ FCU_DEFAULT_LOAN_INTEREST_PERCENT = env.float(
     default=5.0,
 )
 
-FCU_DEFAULT_MAX_LOAN_AMOUNT = env.int(
-    "FCU_DEFAULT_MAX_LOAN_AMOUNT",
-    default=2000000,
-)
+# Manual 4.4 (v3.0): a member may borrow up to 120% of accumulated Contributions.
+FCU_LOAN_LIMIT_PERCENT = env.float("FCU_LOAN_LIMIT_PERCENT", default=120.0)
 
-FCU_DEFAULT_MAX_LOAN_PERCENT_OF_CONTRIBUTIONS = env.float(
-    "FCU_DEFAULT_MAX_LOAN_PERCENT_OF_CONTRIBUTIONS",
-    default=75.0,
-)
-
+# Manual 4.5(b): maximum repayment period.
 FCU_MAX_LOAN_REPAYMENT_MONTHS = 3
+
+# Uploaded forms (signed declarations, loan applications) are private: they live
+# outside MEDIA_ROOT, are never served as static files, and are only handed out by
+# views that check who is asking. On Railway point this at a persistent volume.
+PRIVATE_MEDIA_ROOT = env.path("FCU_PRIVATE_MEDIA_ROOT", default=str(BASE_DIR / "private_media"))
+
+FCU_UPLOAD_MAX_MB = env.int("FCU_UPLOAD_MAX_MB", default=5)
 
 # ---------------------------------------------------------------------
 # Email

@@ -10,7 +10,7 @@ still open for writing*.
 Manual references:
     2.1(b)  a Financial Cycle is six (6) months
     3.1     UGX 100,000 savings + UGX 5,000 Emergency Fund per member per month
-    3.2     the Payment Window runs to the 5th of the *following* month
+    3.2     the Payment Window runs to the 10th of the *following* month
     4.5(d)  no loan may extend beyond the currently running Financial Cycle
     10.2    the Treasurer reports bi-annually - i.e. once per Cycle, twice per Financial Year
     11.4    the General Meeting may amend the contribution amounts
@@ -33,6 +33,10 @@ MONTH_NAMES = [
     "", "January", "February", "March", "April", "May", "June",
     "July", "August", "September", "October", "November", "December",
 ]
+
+
+# Manual 3.2 (v3.0): a month's Contributions are due by this day of the NEXT month.
+PAYMENT_WINDOW_LAST_DAY = 10
 
 
 def _last_day_of_month(year: int, month: int) -> date:
@@ -391,13 +395,13 @@ class Cycle(models.Model):
     @property
     def payment_window_closes(self):
         """
-        Manual 3.2: a month's contribution may be paid up to the 5th of the
-        FOLLOWING month. So the last legitimate payment for a cycle lands *after*
+        Manual 3.2 (v3.0): a month's contribution may be paid up to the 10th of
+        the FOLLOWING month. So the last legitimate payment for a cycle lands *after*
         the cycle's own end_date. close() warns about this; nothing else should
         assume end_date is the last day money can arrive.
         """
         nxt = _add_months(self.end_date, 1)
-        return date(nxt.year, nxt.month, 5)
+        return date(nxt.year, nxt.month, PAYMENT_WINDOW_LAST_DAY)
 
     @property
     def has_financial_records(self):

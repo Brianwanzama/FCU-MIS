@@ -139,6 +139,39 @@ is recommended before Phase 2 — flag if you'd like that added now rather than 
 - **Available savings** = deposits paid across all cycles, reversed payments and
   emergency contributions excluded. Loan balances will be deducted once Loans exist.
 
+## Loan applications (Manual v3.0, section 4)
+
+Members apply from **Loans** in the menu (`/loans/`):
+
+1. Download the **Loan Application Form** and the **Member Declaration and Commitment
+   Agreement** (the consent to recovery from contributions, Manual 4.6) from the page.
+2. Fill in and sign them, scan or photograph them, and upload them (PDF, JPG or PNG,
+   up to 5 MB, checked by content). The signed Declaration is uploaded once and reused.
+3. The system checks Manual 4.3 before accepting the application: Active member,
+   declaration on file, no other open application, deposits up to date (month due by the
+   10th of the next month), amount within **120% of accumulated deposits** (emergency
+   excluded, Manual 4.4), repayment of **at most 3 months that finishes inside the
+   running cycle** (4.5). Overdue emergency contributions are shown as a warning only.
+4. The Administrator or Chairperson approves or rejects (never their own application).
+   Approval needs a **verified** Declaration, re-runs the checks, and fixes the schedule:
+   5% a month on the outstanding balance, equal monthly instalments of principal and
+   interest. The member sees the status, any reason for rejection, and the schedule.
+
+Staff pages: `/loans/applications/` (Administrator, Treasurer, Chairperson),
+`/loans/declarations/` (verification: Administrator, Treasurer, Chairperson, Secretary).
+No guarantor is needed (4.2(b)).
+
+**Uploaded files are private.** They are stored outside `MEDIA_ROOT` in
+`PRIVATE_MEDIA_ROOT` (env `FCU_PRIVATE_MEDIA_ROOT`, default `./private_media`) and are
+handed out only by views that check the requester. On Railway, mount a persistent volume
+and point `FCU_PRIVATE_MEDIA_ROOT` at it, or uploads are lost on every deploy.
+
+Settings: `FCU_LOAN_LIMIT_PERCENT` (default 120), `FCU_DEFAULT_LOAN_INTEREST_PERCENT`
+(5, per month), `FCU_UPLOAD_MAX_MB` (5). The old `FCU_DEFAULT_MAX_LOAN_*` settings are gone.
+Run `python manage.py migrate`: adds `loans.0001` and `contributions.0004`.
+
+Not built yet: disbursement, recording repayments, and automatic recovery.
+
 ## Next phase
 
 The SRS was revised to v1.1 (General Ledger, Financial Position, Cycle Locking,

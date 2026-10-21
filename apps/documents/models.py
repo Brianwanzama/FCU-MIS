@@ -6,7 +6,7 @@ class DocumentTemplate(models.Model):
     """
     FR-17 — the official Loan Application Form and Member Declaration & Commitment
     Agreement, stored as versioned, downloadable templates. Distribution only:
-    the system does not collect e-signatures or attach signed copies in v1.0 (A12).
+    members upload the signed copies through the Loans module, which keeps them as private files.
     """
 
     class DocType(models.TextChoices):

@@ -13,7 +13,7 @@ The distinction that makes this work is between two dates:
     period_month   WHICH month the money settles.
 
 They are routinely different, and the difference is not an edge case — Manual §3.2
-gives a Payment Window that runs to the 5th of the FOLLOWING month, so a June
+gives a Payment Window that runs to the 10th of the FOLLOWING month, so a June
 contribution paid on 4 July is on time. Without period_month there is no way to
 tell that payment apart from an early July one, which would make the late-payment
 penalty (§3.3), the months-contributed counts, and the Inactive trigger (§2.1(b))
@@ -23,7 +23,7 @@ Manual references:
     §1.1     "Contribution" includes BOTH the monthly savings and the Emergency Fund
              payment — hence ContributionType, and hence they are counted separately.
     §3.1     UGX 100,000 savings + UGX 5,000 Emergency Fund, per member, per month.
-    §3.2     The Payment Window: 1st of the month to the 5th of the month following.
+    §3.2     The Payment Window: 1st of the month to the 10th of the month following.
     §6.1     Emergency Fund contributions are ring-fenced to the Emergency Fund.
     §10.1    The Treasurer maintains detailed records of Contributions.
 """
@@ -139,7 +139,7 @@ class Contribution(models.Model):
         help_text=(
             "WHICH month this payment settles, normalised to the 1st of that month. "
             "Distinct from payment_date: Manual §3.2 lets a month be paid up to the "
-            "5th of the following month, so a June contribution may legitimately "
+            "10th of the following month, so a June contribution may legitimately "
             "carry a July payment_date."
         ),
     )

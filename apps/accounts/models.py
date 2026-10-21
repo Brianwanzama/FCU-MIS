@@ -146,6 +146,21 @@ class User(AbstractUser):
         )
 
     @property
+    def can_approve_loans(self):
+        """Approve or reject loan applications (Administrator or Chairperson)."""
+        return self.has_chairperson_access
+
+    @property
+    def can_verify_undertakings(self):
+        """Check a member's signed Declaration and Commitment Agreement."""
+        return self.role in (
+            self.Role.ADMINISTRATOR,
+            self.Role.TREASURER,
+            self.Role.CHAIRPERSON,
+            self.Role.SECRETARY,
+        )
+
+    @property
     def has_secretariat_access(self):
         """
         Member administration, correspondence,

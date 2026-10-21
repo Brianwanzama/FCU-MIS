@@ -404,6 +404,44 @@ def _require_pending(reversal):
         raise ContributionError("This reversal request has already been decided.")
 
 
+def contribution_arrears_to_date(member, cycle, today=None):
+    """
+    What the member should already have paid by `today`, and what is missing.
+
+    Manual 3.2: a month's Contribution is due between the 1st of the month and
+    the 10th of the following month. A month is OVERDUE once that window has
+    closed. Overdue amounts are measured against what the member has paid in
+    total for the cycle, so an early payment covers a later month.
+    """
+
+    from apps.cycles.models import PAYMENT_WINDOW_LAST_DAY, _add_months
+
+    today = today or timezone.localdate()
+    first = cycle.start_date.replace(day=1)
+
+    months_overdue = 0
+
+    for index in range(cycle.duration_months):
+        month = _add_months(first, index)
+        following = _add_months(month, 1)
+
+        if today > following.replace(day=PAYMENT_WINDOW_LAST_DAY):
+            months_overdue += 1
+
+    summary = member_contribution_summary(member, cycle)
+
+    deposits_required = cycle.monthly_savings_amount * months_overdue
+    emergency_required = cycle.monthly_emergency_amount * months_overdue
+
+    return {
+        "months_overdue": months_overdue,
+        "deposits_required": deposits_required,
+        "deposit_arrears": max(deposits_required - summary["monthly_paid"], Decimal("0")),
+        "emergency_required": emergency_required,
+        "emergency_arrears": max(emergency_required - summary["emergency_paid"], Decimal("0")),
+    }
+
+
 def cycle_payments(cycle):
     """
     Every payment that counts towards `cycle`: those recorded in it, except

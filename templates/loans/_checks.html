@@ -1,0 +1,14 @@
+<ul class="list-group list-group-flush">
+  {% for c in result.checks %}
+    <li class="list-group-item d-flex gap-2">
+      <span class="fw-bold {% if c.ok %}text-success{% elif c.blocking %}text-danger{% else %}text-warning{% endif %}"
+            aria-label="{% if c.ok %}Passed{% elif c.blocking %}Not met{% else %}Warning{% endif %}">
+        {% if c.ok %}&#10003;{% elif c.blocking %}&#10007;{% else %}!{% endif %}
+      </span>
+      <div>
+        <div>{{ c.label }}</div>
+        {% if c.detail %}<div class="small text-muted">{{ c.detail }}</div>{% endif %}
+      </div>
+    </li>
+  {% endfor %}
+</ul>

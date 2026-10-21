@@ -14,6 +14,7 @@ urlpatterns = [
     path("members/", include("apps.members.urls")),
     path("cycles/", include("apps.cycles.urls")),
     path("contributions/", include("apps.contributions.urls")),
+    path("loans/", include("apps.loans.urls")),
 
     # Dashboard
     path("", include("apps.core.urls")),

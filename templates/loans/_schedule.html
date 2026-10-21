@@ -1,0 +1,20 @@
+<div class="table-responsive">
+  <table class="table table-sm align-middle mb-0">
+    <thead>
+      <tr><th>#</th><th>Due</th><th class="text-end">Instalment</th><th class="text-end">Principal</th>
+          <th class="text-end">Interest</th><th class="text-end">Balance after</th></tr>
+    </thead>
+    <tbody>
+      {% for row in schedule %}
+        <tr>
+          <td>{{ row.number }}</td>
+          <td>{{ row.due_date|date:"d M Y" }}</td>
+          <td class="text-end fw-semibold">{{ row.instalment|ugx }}</td>
+          <td class="text-end">{{ row.principal|ugx }}</td>
+          <td class="text-end">{{ row.interest|ugx }}</td>
+          <td class="text-end">{{ row.balance|ugx }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
