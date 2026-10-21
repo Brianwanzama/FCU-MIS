@@ -61,6 +61,194 @@ during development (member activation, duplicate-activation rejection, wrong-ema
 rejection, role-based 403, document download). A proper `pytest`/`TestCase` suite
 is recommended before Phase 2 — flag if you'd like that added now rather than later.
 
+## Business rules confirmed by FCU
+
+- **Targets:** per member, deposits UGX 600,000 and emergency UGX 30,000 over a
+  6-month cycle, reported separately. Unit targets = eligible (Active) members x those.
+- **Mid-cycle joiners** owe the full cycle amount.
+- **Member status** is assessed when a cycle closes: a member who did not meet the
+  cycle's target is Inactive for the next cycle, and Active only if they completed
+  the previous one. The target is the DEPOSIT target only; emergency contributions
+  are not part of it. Ordinary payments never change status mid-cycle, and a
+  Withdrawn member is never reactivated automatically.
+- **Paying old arrears:** closed cycles stay locked, so arrears are paid as a
+  contribution recorded in the active cycle with "Settles arrears of cycle" set. It
+  counts towards the closed cycle's target (not the active cycle's), cannot exceed
+  the arrears owed, and updates the member's status automatically: Active once the
+  most recent closed cycle is fully paid, Inactive again if that payment is reversed.
+- **Reopening a cycle** leaves the statuses set at its first close as they were; they
+  are recalculated when it is closed again.
+- **Loans (Phase 5/6, not built yet):** a loan can never exceed the member's
+  previous contributions. Recovery may use all of the member's previous deposits
+  (across cycles); emergency contributions are excluded and protected.
+
+## Editing and reversing contributions
+
+| Action | Administrator | Treasurer | Chairperson | Member |
+| --- | --- | --- | --- | --- |
+| View all contributions | yes | yes | yes | no |
+| Record contributions | yes | yes | no | no |
+| Edit (reason required) | yes | yes | yes | no |
+| Request a reversal | yes | yes | yes | no |
+| Approve / reject a reversal | yes | no | yes | no |
+
+- Financial records are never deleted (Django admin delete is disabled too). A
+  reversal is requested with a reason and takes effect only when someone *other than
+  the requester* approves it. The payment then stops counting towards balances but
+  stays in the register and the audit history.
+- Every edit records old value, new value, user, time and reason; balances recalculate.
+- Contributions in a closed cycle cannot be edited or reversed until an Administrator
+  reopens the cycle. A payment with a reversal pending cannot be edited.
+- Pages: `/contributions/<id>/` (detail + history), `/contributions/<id>/edit/`,
+  `/contributions/<id>/reverse/`, `/contributions/reversals/`.
+- Run `python manage.py migrate` after pulling: this adds migration `0003`.
+
+## Cycle management
+
+- **Who was eligible:** each cycle keeps its own membership record
+  (`CycleMembership`). Activating a cycle records every Active member; a member who
+  becomes Active mid-cycle (new joiner, or cleared arrears) is added and owes the
+  full amount; a member who withdraws gets a leave date and stops counting. A cycle's
+  unit targets use this record, so they no longer change when members later join or
+  leave. An Upcoming cycle projects today's Active headcount. Cycles that were already
+  running when this was added were back-filled from the members Active at that time.
+- **Editing dates:** start date and duration can be changed while a cycle is Upcoming
+  or Active. Targets recalculate, the change is audited (old and new dates), and any
+  payment whose month now falls outside the cycle is flagged on the cycle page and
+  in the close warnings for review.
+- **Closing:** a cycle cannot be closed while a reversal request is pending (hard
+  block). The close screen also warns about outstanding deposits, outstanding
+  emergency contributions, flagged payments and the members who will become Inactive.
+  Outstanding loans will be added when the Loans module exists.
+- Run `python manage.py migrate` after pulling: adds migrations `cycles.0002` and `0003`.
+
+## Member financial history and statements
+
+- `/members/<code>/` is the member's financial dashboard with a **cycle selector**
+  (every cycle that has begun). It shows deposits and emergency (target, paid,
+  outstanding), available savings, loan balance and the payment ledger for the
+  selected cycle. `/members/me/` ("My Finances" in the menu) opens a signed-in
+  member's own page.
+- **Access:** a member can open only their own pages (403 otherwise). The
+  Administrator, Treasurer and Chairperson can open anyone's. The Secretary can see
+  the member register but not other members' finances.
+- **Statements:** `/members/<code>/statement/?cycle=<id>` (printable) and
+  `/members/<code>/statement.pdf?cycle=<id>` (PDF). The ledger shows a running
+  deposits total; reversed payments and payments that count towards another cycle
+  are shown in grey and are not counted.
+- **Available savings** = deposits paid across all cycles, reversed payments and
+  emergency contributions excluded. Loan balances will be deducted once Loans exist.
+
+## Loan applications (Manual v3.0, section 4)
+
+Members apply from **Loans** in the menu (`/loans/`):
+
+1. Download the **Loan Application Form** and the **Member Declaration and Commitment
+   Agreement** (the consent to recovery from contributions, Manual 4.6) from the page.
+2. Fill in and sign them, scan or photograph them, and upload them (PDF, JPG or PNG,
+   up to 5 MB, checked by content). The signed Declaration is uploaded once and reused.
+3. The system checks Manual 4.3 before accepting the application: Active member,
+   declaration on file, no other open application, deposits up to date (month due by the
+   10th of the next month), amount within **100% of accumulated deposits** (emergency
+   excluded; FCU's decision, Manual 4.4 and the form still say 120%), repayment of **at most 3 months that finishes inside the
+   running cycle** (4.5). Overdue emergency contributions are shown as a warning only.
+4. The Administrator or Chairperson approves or rejects (never their own application).
+   Approval needs a **verified** Declaration, re-runs the checks, and fixes the schedule:
+   5% a month on the outstanding balance, equal monthly instalments of principal and
+   interest. The member sees the status, any reason for rejection, and the schedule.
+
+Staff pages: `/loans/applications/` (Administrator, Treasurer, Chairperson),
+`/loans/declarations/` (verification: Administrator, Treasurer, Chairperson, Secretary).
+No guarantor is needed (4.2(b)).
+
+**Uploaded files are private.** They are stored outside `MEDIA_ROOT` in
+`PRIVATE_MEDIA_ROOT` (env `FCU_PRIVATE_MEDIA_ROOT`, default `./private_media`) and are
+handed out only by views that check the requester. On Railway, mount a persistent volume
+and point `FCU_PRIVATE_MEDIA_ROOT` at it, or uploads are lost on every deploy.
+
+Settings: `FCU_LOAN_LIMIT_PERCENT` (default 100), `FCU_DEFAULT_LOAN_INTEREST_PERCENT`
+(5, per month), `FCU_UPLOAD_MAX_MB` (5). The old `FCU_DEFAULT_MAX_LOAN_*` settings are gone.
+Run `python manage.py migrate`: adds `loans.0001` and `contributions.0004`.
+
+### Disbursement, repayments and recovery
+
+- **Disbursement:** the Treasurer or Administrator records the payout of an approved
+  application (method, reference, date). That creates the loan and fixes the schedule
+  from the payout date (5% a month on the outstanding balance, equal monthly
+  instalments); it must still finish inside the running cycle. A member cannot borrow
+  again while a loan is unpaid, and the loan limit is reduced by what is owed.
+- **Repayments:** the Treasurer or Administrator records them; they clear the oldest
+  instalment first. Overpaying is refused. Reversing a repayment (or a recovery) needs
+  the Administrator or Chairperson, never the person who recorded it, with a reason;
+  the record stays, marked reversed, and the balance is restored.
+- **Statuses:** Current, Overdue (an instalment is late), Defaulted (the agreed period
+  ended with money owed, Manual 4.7) and Settled. Pages: `/loans/loan/<id>/`,
+  `/loans/register/`; members see their own loans on `/loans/`.
+- **Automatic recovery (Manual 4.6):** when a loan's agreed period has ended with money
+  still owed, FCU recovers principal + interest from the member's **deposits across all
+  cycles; emergency contributions are never touched**. If savings fall short, the rest
+  stays outstanding and later deposits are recovered on later days. The recovery is a
+  separate "savings offset" transaction linked to the loan: the original contributions
+  are not edited, and statements show both. Each recovery is audited with amounts before
+  and after and the policy reference. It cannot run twice in a day (locked, and enforced
+  by the database).
+- **Effect on status (4.6(d)):** if the recovery leaves the member below the deposits
+  required for the cycle to date, they become Inactive ("Loan recovered from
+  contributions") until they pay back up, then Active again automatically.
+- **Scheduled job:** run `python manage.py recover_overdue_loans` daily (Railway cron or
+  similar). It needs nobody logged in. It is **off until FCU approves the policy**: set
+  `FCU_LOAN_AUTO_RECOVERY_ENABLED=True` (and `FCU_LOAN_RECOVERY_POLICY_REF`, e.g. the
+  General Meeting resolution). Until then the command only prints a dry run of what it
+  would recover. `--dry-run` is always available.
+- Run `python manage.py migrate`: adds `loans.0002` and `members.0005`.
+
+## Investments and profit distribution (Manual v3.0, sections 7 and 8)
+
+- **Investments** (`/investments/`, "Investments" in the menu): unit trusts, microfinance
+  ventures and real estate, registered in FCU's name. The Treasurer or Administrator
+  records money invested, money returned, earnings received, fees and market value
+  updates. Reversing a transaction needs the Administrator or Chairperson (not the
+  recorder) and a reason; records are never deleted.
+- **Position** per investment: invested, worth now (latest valuation, or what is still
+  in it), earnings, and total return. **Every member** sees the portfolio totals and
+  their own indicative share (their accumulated deposits as a share of all members'
+  deposits, applied to the portfolio's value); only officers see the transactions.
+- **Profit distribution (bonus):** the Treasurer drafts a distribution; the Chairperson or
+  Administrator (not the drafter) approves it with the **General Meeting resolution
+  reference**; the Treasurer marks it paid. Shares are in proportion to each member's
+  accumulated deposits (after loan recoveries) and go only to **Active members in Good
+  Standing** (no overdue contributions, no overdue or defaulted loan); Inactive and
+  Withdrawn members get nothing and their share is spread over the eligible members.
+  Whole shillings, adding up exactly. Shares are recalculated at approval and then fixed.
+- Member dashboard: net position = deposits + bonuses received - loan balance. A share
+  of the investments is shown for information but not added (it is funded by the deposits).
+- Run `python manage.py migrate`: adds `unittrust.0001`.
+
+## Reports and Excel exports (Manual 10.2)
+
+`/reports/` ("Reports" in the menu) for the Administrator, Treasurer and Chairperson.
+A cycle is six months, so each cycle's report is the **bi-annual report**: contributions
+(deposits and emergency against target), a row per member, loans disbursed in the cycle
+(repaid, recovered, interest earned, outstanding), investments and profit shared, and the
+financial position. View it, print it, or download **PDF** or **Excel** (Summary, Members,
+Loans, Investments sheets). Also exportable to Excel: all contributions (filter by cycle),
+loans with repayments, investments with transactions, and each member's statement.
+
+- Excel text is protected against formula injection (`=`, `+`, `-`, `@` are kept as text).
+- **Derived cash** is worked out from every recorded movement of money. Expenses and
+  membership fees are not recorded yet, so check it against the bank and cash balances.
+- Interest earned counts what is paid as interest first within each instalment.
+
+## Trying it out
+
+See **docs/TESTING.md**: run it on your computer, load demo logins with `python manage.py seed_demo`, and a walkthrough per role.
+
+## Deployment
+
+See **docs/DEPLOYMENT.md** (Railway setup, variables, first deployment, backups, enabling loan
+recovery). `python manage.py preflight` checks an installation; `GET /healthz/` is the
+health check; CI runs on every push (`.github/workflows/ci.yml`).
+
 ## Next phase
 
 The SRS was revised to v1.1 (General Ledger, Financial Position, Cycle Locking,

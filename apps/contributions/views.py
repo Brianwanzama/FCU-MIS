@@ -1,43 +1,49 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Q
-from django.shortcuts import redirect
-from django.urls import reverse_lazy
-from django.views.generic import CreateView, ListView
+from django.core.exceptions import PermissionDenied
+from django.db.models import Exists, OuterRef, Q
+from django.shortcuts import get_object_or_404, redirect
+from django.urls import reverse, reverse_lazy
+from django.views import View
+from django.views.generic import CreateView, DetailView, FormView, ListView, UpdateView
 
-from apps.accounts.models import User
+from apps.auditlog.models import AuditLog
 from apps.cycles.models import Cycle
 
-from .forms import ContributionForm
-from .models import Contribution
+from .forms import (
+    ContributionEditForm,
+    ContributionForm,
+    ReversalDecisionForm,
+    ReversalRequestForm,
+)
+from .models import Contribution, ContributionReversal
 from .services import (
     ContributionError,
+    _snapshot,
+    approve_reversal,
     cycle_contribution_summary,
     record_contribution,
+    reject_reversal,
+    request_reversal,
+    update_contribution,
 )
 
 
 class FinancialAccessMixin(LoginRequiredMixin):
     """
-    Restricts access to Administrators and Treasurers.
+    Who may open this page. Administrators, Treasurers and Chairpersons can
+    view every contribution; stricter actions set `permission` to the User
+    helper that must be true (e.g. "has_financial_write_access" to record).
     """
+
+    permission = "has_financial_view_access"
 
     def dispatch(self, request, *args, **kwargs):
 
-        # ---------- TEMPORARY DEBUG ----------
-        print("=" * 60)
-        print("Logged in user :", request.user.username)
-        print("Role           :", request.user.role)
-        print("Authenticated  :", request.user.is_authenticated)
-        print("Has Full Access:", request.user.has_full_access)
-        print("Financial Write:", request.user.has_financial_write_access)
-        print("=" * 60)
-        # ------------------------------------
+        if not request.user.is_authenticated:
+            return self.handle_no_permission()
 
-        if request.user.role not in (
-            User.Role.ADMINISTRATOR,
-            User.Role.TREASURER,
-        ):
+        if not getattr(request.user, self.permission):
             messages.error(
                 request,
                 "You do not have permission to access this page.",
@@ -65,6 +71,14 @@ class ContributionListView(FinancialAccessMixin, ListView):
                 "member",
                 "cycle",
                 "recorded_by",
+            )
+            .annotate(
+                has_pending_reversal=Exists(
+                    ContributionReversal.objects.filter(
+                        contribution=OuterRef("pk"),
+                        status=ContributionReversal.Status.PENDING,
+                    )
+                )
             )
             .order_by("-payment_date", "-id")
         )
@@ -141,6 +155,8 @@ class ContributionCreateView(FinancialAccessMixin, CreateView):
     Record a new contribution.
     """
 
+    permission = "has_financial_write_access"
+
     model = Contribution
     form_class = ContributionForm
     template_name = "contributions/contribution_form.html"
@@ -205,3 +221,169 @@ class ContributionCreateView(FinancialAccessMixin, CreateView):
         )
 
         return redirect(self.success_url)
+
+
+class ContributionDetailView(FinancialAccessMixin, DetailView):
+    """One contribution, its reversal state and its full audit history."""
+
+    model = Contribution
+    template_name = "contributions/contribution_detail.html"
+    context_object_name = "contribution"
+
+    def get_context_data(self, **kwargs):
+
+        context = super().get_context_data(**kwargs)
+        contribution = self.object
+
+        context["history"] = AuditLog.objects.filter(
+            model_name="Contribution",
+            object_id=str(contribution.pk),
+        ).select_related("actor").order_by("-timestamp")
+        context["reversals"] = contribution.reversals.select_related(
+            "requested_by", "decided_by"
+        )
+        context["pending_reversal"] = contribution.pending_reversal
+        context["is_changeable"] = _is_changeable(contribution)
+
+        return context
+
+
+def _is_changeable(contribution):
+    return not (
+        contribution.is_reversed
+        or contribution.pending_reversal
+        or contribution.cycle.is_locked
+    )
+
+
+class ContributionUpdateView(FinancialAccessMixin, UpdateView):
+    """Correct a contribution. A reason is mandatory and audited."""
+
+    permission = "can_edit_contributions"
+    model = Contribution
+    form_class = ContributionEditForm
+    template_name = "contributions/contribution_edit.html"
+    context_object_name = "contribution"
+
+    def get_object(self, queryset=None):
+
+        contribution = super().get_object(queryset)
+        # Taken before the form touches the instance, for the audit log.
+        self.old_snapshot = _snapshot(contribution)
+
+        return contribution
+
+    def get_success_url(self):
+        return reverse("contributions:detail", args=[self.object.pk])
+
+    def form_valid(self, form):
+
+        try:
+            update_contribution(
+                form.instance,
+                self.old_snapshot,
+                actor=self.request.user,
+                reason=form.cleaned_data["reason"],
+            )
+        except ContributionError as exc:
+            form.add_error(None, exc)
+            return self.form_invalid(form)
+
+        self.object = form.instance
+        messages.success(self.request, "Contribution updated.")
+
+        return redirect(self.get_success_url())
+
+
+class ReversalRequestView(FinancialAccessMixin, FormView):
+    """Ask for a contribution to be reversed (needs approval)."""
+
+    permission = "can_request_reversal"
+    form_class = ReversalRequestForm
+    template_name = "contributions/reversal_request.html"
+
+    def dispatch(self, request, *args, **kwargs):
+
+        self.contribution = get_object_or_404(Contribution, pk=kwargs["pk"])
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+
+        context = super().get_context_data(**kwargs)
+        context["contribution"] = self.contribution
+
+        return context
+
+    def form_valid(self, form):
+
+        try:
+            request_reversal(
+                self.contribution,
+                actor=self.request.user,
+                reason=form.cleaned_data["reason"],
+            )
+        except ContributionError as exc:
+            form.add_error(None, exc)
+            return self.form_invalid(form)
+
+        messages.success(
+            self.request,
+            "Reversal requested. It takes effect once the Administrator or "
+            "Chairperson approves it.",
+        )
+
+        return redirect("contributions:detail", pk=self.contribution.pk)
+
+
+class ReversalListView(FinancialAccessMixin, ListView):
+    """Reversal requests: pending first, then the decided ones."""
+
+    model = ContributionReversal
+    template_name = "contributions/reversal_list.html"
+    context_object_name = "reversals"
+    paginate_by = 30
+
+    def get_queryset(self):
+
+        return (
+            ContributionReversal.objects
+            .select_related(
+                "contribution__member",
+                "contribution__cycle",
+                "requested_by",
+                "decided_by",
+            )
+            .order_by(
+                # PENDING sorts before APPROVED/REJECTED
+                "status",
+                "-requested_at",
+            )
+        )
+
+
+class ReversalDecisionView(FinancialAccessMixin, View):
+    """Approve or reject a reversal request (POST only)."""
+
+    permission = "can_approve_reversal"
+    http_method_names = ["post"]
+
+    def post(self, request, pk, decision):
+
+        reversal = get_object_or_404(ContributionReversal, pk=pk)
+        form = ReversalDecisionForm(request.POST)
+        note = form.cleaned_data["note"] if form.is_valid() else ""
+
+        try:
+            if decision == "approve":
+                approve_reversal(reversal, actor=request.user, note=note)
+                messages.success(request, "Reversal approved. The payment no longer counts.")
+            elif decision == "reject":
+                reject_reversal(reversal, actor=request.user, note=note)
+                messages.success(request, "Reversal rejected. The payment is unchanged.")
+            else:
+                raise PermissionDenied
+        except ContributionError as exc:
+            messages.error(request, "; ".join(exc.messages))
+
+        return redirect("contributions:reversals")

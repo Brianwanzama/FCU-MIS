@@ -42,11 +42,16 @@ def cycle_list(request):
 def cycle_detail(request, pk):
     cycle = get_object_or_404(Cycle.objects.select_related("financial_year"), pk=pk)
     deletable, delete_blocker = cycle.is_deletable()
+    out_of_range = cycle.out_of_range_payments().select_related("member")
     return render(
         request,
         "cycles/cycle_detail.html",
         {
             "cycle": cycle,
+            "out_of_range": out_of_range[:50],
+            "out_of_range_count": out_of_range.count(),
+            "pending_reversal_count": cycle.pending_reversals().count(),
+            "memberships": cycle.memberships.select_related("member"),
             "deletable": deletable,
             "delete_blocker": delete_blocker,
             "active_cycle": services.get_active_cycle(),
@@ -98,6 +103,13 @@ def cycle_edit(request, pk):
                 form.add_error(None, exc)
             else:
                 messages.success(request, f"{cycle} updated.")
+                flagged = cycle.out_of_range_payments().count()
+                if flagged:
+                    messages.warning(
+                        request,
+                        f"{flagged} payment(s) now fall outside the revised dates. "
+                        f"Review them on this page before closing the cycle.",
+                    )
                 return redirect("cycles:detail", pk=cycle.pk)
     else:
         form = CycleForm(instance=cycle)
@@ -125,7 +137,9 @@ def cycle_activate(request, pk):
 @ADMIN_ONLY
 def cycle_close(request, pk):
     cycle = get_object_or_404(Cycle, pk=pk)
-    warnings = cycle.blocking_issues_for_close() if cycle.status == Cycle.Status.ACTIVE else []
+    is_active = cycle.status == Cycle.Status.ACTIVE
+    warnings = cycle.blocking_issues_for_close() if is_active else []
+    blockers = cycle.hard_blockers_for_close() if is_active else []
 
     if request.method == "POST":
         form = CycleCloseForm(request.POST)
@@ -147,7 +161,7 @@ def cycle_close(request, pk):
     return render(
         request,
         "cycles/cycle_close.html",
-        {"cycle": cycle, "form": form, "warnings": warnings},
+        {"cycle": cycle, "form": form, "warnings": warnings, "blockers": blockers},
     )
 
 

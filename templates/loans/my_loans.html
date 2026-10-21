@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}My Loans{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-4">
+  <div>
+    <h1 class="mb-1">My loans</h1>
+    <p class="text-muted mb-0">{{ member.member_code }} &middot; {{ member.full_name }}</p>
+  </div>
+  <div class="d-flex gap-2">
+    {% if user.has_financial_view_access %}
+      <a href="{% url 'loans:applications' %}" class="btn btn-outline-secondary">All applications</a>
+    {% endif %}
+    {% if user.can_verify_undertakings %}
+      <a href="{% url 'loans:undertakings' %}" class="btn btn-outline-secondary">Signed declarations</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-7">
+
+    <div class="card fcu-card mb-4">
+      <div class="card-header">How to apply</div>
+      <div class="card-body">
+        <ol class="mb-3">
+          <li>Download the <strong>Loan Application Form</strong> and the <strong>Member Declaration and Commitment Agreement</strong> below.</li>
+          <li>Fill in and sign them. The Declaration is also your consent to FCU recovering an unpaid loan from your contributions (Manual 4.6).</li>
+          <li>Scan or photograph the signed pages, then upload them here.</li>
+          <li>The Administrator or Chairperson reviews your application. You will see the decision on this page.</li>
+        </ol>
+        <div class="d-flex gap-2 flex-wrap">
+          {% if documents.application %}
+            <a class="btn btn-fcu-primary" href="{% url 'documents:download' documents.application.pk %}">Download Loan Application Form</a>
+          {% endif %}
+          {% if documents.declaration %}
+            <a class="btn btn-fcu-primary" href="{% url 'documents:download' documents.declaration.pk %}">Download Member Declaration</a>
+          {% endif %}
+          {% if not documents.application and not documents.declaration %}
+            <span class="text-muted">The forms have not been uploaded to the Document Library yet.</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="card fcu-card mb-4">
+      <div class="card-header">Signed Member Declaration</div>
+      <div class="card-body">
+        {% if undertaking %}
+          <p class="mb-2">
+            Uploaded {{ undertaking.uploaded_at|date:"d M Y" }} &middot;
+            {% if undertaking.status == "VERIFIED" %}<span class="badge text-bg-success">Verified</span>
+            {% else %}<span class="badge text-bg-warning">Awaiting verification</span>{% endif %}
+            &middot; <a href="{% url 'loans:file' 'undertaking' undertaking.pk %}">Download your copy</a>
+          </p>
+        {% else %}
+          <p class="text-muted">You have not uploaded a signed Declaration yet. You need one on file before a loan can be approved.</p>
+        {% endif %}
+        <form method="post" enctype="multipart/form-data" action="{% url 'loans:undertaking_upload' %}" class="d-flex gap-2 flex-wrap">
+          {% csrf_token %}
+          {{ undertaking_form.file }}
+          <button class="btn btn-outline-secondary" type="submit">{% if undertaking %}Upload a new copy{% else %}Upload{% endif %}</button>
+        </form>
+        <div class="form-text">PDF, JPG or PNG, up to 5 MB.</div>
+      </div>
+    </div>
+
+    {% if loans %}
+    <div class="card fcu-card mb-4">
+      <div class="card-header">My loans</div>
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <thead><tr><th>Loan</th><th>Disbursed</th><th class="text-end">Borrowed</th><th class="text-end">Outstanding</th><th>Status</th></tr></thead>
+          <tbody>
+          {% for loan in loans %}
+            <tr>
+              <td><a href="{% url 'loans:loan' loan.pk %}">{{ loan.reference }}</a></td>
+              <td>{{ loan.disbursed_on|date:"d M Y" }}</td>
+              <td class="text-end">{{ loan.principal|ugx }}</td>
+              <td class="text-end">{{ loan.outstanding|ugx }}</td>
+              <td>{% include "loans/_loan_status.html" with label=loan.display_status %}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="card fcu-card">
+      <div class="card-header">My applications</div>
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <thead><tr><th>Ref</th><th>Submitted</th><th class="text-end">Amount</th><th>Months</th><th>Status</th></tr></thead>
+          <tbody>
+          {% for a in applications %}
+            <tr>
+              <td><a href="{% url 'loans:detail' a.pk %}">{{ a.reference }}</a></td>
+              <td>{{ a.submitted_at|date:"d M Y" }}</td>
+              <td class="text-end">{{ a.amount_approved|default:a.amount_requested|ugx }}</td>
+              <td>{{ a.period_months }}</td>
+              <td>
+                {% if a.status == "APPROVED" %}<span class="badge text-bg-success">Approved</span>
+                {% elif a.status == "REJECTED" %}<span class="badge text-bg-danger">Rejected</span>
+                {% elif a.status == "WITHDRAWN" %}<span class="badge text-bg-secondary">Withdrawn</span>
+                {% elif a.status == "DISBURSED" %}<span class="badge text-bg-primary">Paid out</span>
+                {% else %}<span class="badge text-bg-warning">Awaiting decision</span>{% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5" class="text-center text-muted py-4">You have not applied for a loan yet.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card fcu-card">
+      <div class="card-header">Can I apply?</div>
+      {% include "loans/_checks.html" %}
+      <div class="card-body border-top">
+        {% if result.eligible %}
+          <a href="{% url 'loans:apply' %}" class="btn btn-fcu-gold w-100">Apply for a loan</a>
+        {% else %}
+          <p class="small text-muted mb-2">Fix the items marked &#10007; before you can apply.</p>
+          <a href="{% url 'loans:apply' %}" class="btn btn-outline-secondary w-100">Open the application form anyway</a>
+        {% endif %}
+        <p class="small text-muted mt-3 mb-0">
+          Interest is 5% a month on the outstanding balance, repaid in equal monthly instalments over
+          at most 3 months, finishing within the current cycle. No extensions are granted after approval.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

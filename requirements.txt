@@ -3,10 +3,5 @@ django-environ==0.14.0
 psycopg2-binary==2.9.12
 gunicorn==23.0.0
 whitenoise==6.9.0
-openpyxl
-reportlab
-
-# Added in later roadmap phases (kept here as a forward reference, not yet used):
-# reportlab          # PDF statement/report generation (Phase 8)
-# openpyxl           # Excel export (Phase 8)
-# gunicorn           # production WSGI server (Phase 10)
+openpyxl==3.1.5
+reportlab==5.0.1

@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Statement {{ member.member_code }}{% endblock %}
+
+{% block content %}
+<style>
+  @media print {
+    .navbar-fcu, .no-print, footer { display: none !important; }
+    .fcu-card { border: 0 !important; box-shadow: none !important; }
+  }
+  .ledger-muted { color: #8a919c; }
+</style>
+
+<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2 no-print">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb small mb-0">
+      <li class="breadcrumb-item"><a href="{% url 'members:detail' member.member_code %}">{{ member.member_code }}</a></li>
+      <li class="breadcrumb-item active" aria-current="page">Statement</li>
+    </ol>
+  </nav>
+  {% if statement %}
+  <div class="d-flex gap-2">
+    <a class="btn btn-fcu-primary btn-sm"
+       href="{% url 'members:statement_pdf' member.member_code %}?cycle={{ statement.cycle.pk }}">Download PDF</a>
+    <a class="btn btn-outline-secondary btn-sm"
+       href="{% url 'members:statement_excel' member.member_code %}?cycle={{ statement.cycle.pk }}">Excel</a>
+    <button class="btn btn-outline-secondary btn-sm" onclick="window.print()">Print</button>
+  </div>
+  {% endif %}
+</div>
+
+{% if not statement %}
+  <div class="alert alert-info">There is no cycle to produce a statement for yet.</div>
+{% else %}
+
+<form method="get" class="d-flex align-items-center gap-2 mb-3 no-print">
+  <label for="cycle" class="small text-muted mb-0">Cycle</label>
+  <select id="cycle" name="cycle" class="form-select form-select-sm w-auto" onchange="this.form.submit()">
+    {% for c in cycles %}
+      <option value="{{ c.pk }}" {% if c.pk == statement.cycle.pk %}selected{% endif %}>
+        Cycle {{ c.cycle_number }} &middot; {{ c.name }} ({{ c.get_status_display }})
+      </option>
+    {% endfor %}
+  </select>
+  <noscript><button class="btn btn-sm btn-outline-secondary">Show</button></noscript>
+</form>
+
+<h1 class="mb-1">Member statement</h1>
+<p class="text-muted">
+  <strong>{{ member.member_code }}</strong> &middot; {{ member.full_name }}<br>
+  Cycle {{ statement.cycle.cycle_number }} &middot; {{ statement.cycle.name }}
+  ({{ statement.cycle.start_date|date:"d M Y" }} &ndash; {{ statement.cycle.end_date|date:"d M Y" }})
+  &middot; {{ member.get_status_display }}
+</p>
+
+<div class="card fcu-card mb-4">
+  <div class="table-responsive">
+    <table class="table mb-0 align-middle">
+      <thead><tr><th></th><th class="text-end">Target</th><th class="text-end">Paid</th><th class="text-end">Outstanding</th></tr></thead>
+      <tbody>
+        <tr>
+          <th>Deposits</th>
+          <td class="text-end">{{ statement.deposit_target|ugx }}</td>
+          <td class="text-end">{{ statement.deposits_paid|ugx }}</td>
+          <td class="text-end">{{ statement.deposits_outstanding|ugx }}</td>
+        </tr>
+        <tr>
+          <th>Emergency</th>
+          <td class="text-end">{{ statement.emergency_target|ugx }}</td>
+          <td class="text-end">{{ statement.emergency_paid|ugx }}</td>
+          <td class="text-end">{{ statement.emergency_outstanding|ugx }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="card-body border-top">
+    <div class="row g-2 small">
+      <div class="col-md-4">Cycle target: <strong>{% if statement.target_met %}Met{% else %}Not yet met{% endif %}</strong></div>
+      <div class="col-md-4">Available savings: <strong>{{ statement.available_savings|ugx }}</strong></div>
+      <div class="col-md-4">Loan outstanding: <strong>{{ statement.loan_outstanding|ugx }}</strong></div>
+    </div>
+  </div>
+</div>
+
+{% if statement.offsets %}
+  <div class="alert alert-warning small">
+    <strong>Savings recovered for loans in this cycle: {{ statement.deposits_offsets|ugx }}.</strong>
+    Your original deposits are unchanged; the recovery is a separate transaction that lowers your contribution position.
+    <ul class="mb-0 mt-1">
+      {% for o in statement.offsets %}
+        <li>{{ o.payment_date|date:"d M Y" }} &middot; {{ o.loan.reference }} &middot; {{ o.amount|ugx }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}
+
+<h2 class="h5">Payment ledger</h2>
+<div class="card fcu-card">
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <thead>
+        <tr>
+          <th>Date</th><th>Description</th><th>Method / reference</th>
+          <th class="text-end">Deposit</th><th class="text-end">Emergency</th><th class="text-end">Deposits to date</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for row in statement.rows %}
+        <tr class="{% if not row.counts_here %}ledger-muted{% endif %}">
+          <td class="text-nowrap">{{ row.date|date:"d M Y" }}</td>
+          <td>
+            <span {% if row.reversed %}style="text-decoration: line-through"{% endif %}>{{ row.description }}</span>
+            {% if row.note %}<div class="small fst-italic">{{ row.note }}</div>{% endif %}
+          </td>
+          <td class="small">{{ row.method }}{% if row.reference %}<br>{{ row.reference }}{% endif %}</td>
+          <td class="text-end">{% if row.is_deposit %}{{ row.amount|ugx }}{% endif %}</td>
+          <td class="text-end">{% if not row.is_deposit %}{{ row.amount|ugx }}{% endif %}</td>
+          <td class="text-end">{{ row.running_deposits|ugx }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6" class="text-center text-muted py-4">No payments recorded for this cycle.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<p class="small text-muted mt-2">
+  Reversed payments and payments that count towards another cycle are shown in grey and are not included in the totals.
+  Generated {{ statement.generated_at|date:"d M Y H:i" }}.
+</p>
+
+{% endif %}
+{% endblock %}

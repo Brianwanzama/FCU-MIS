@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}{{ loan.reference }}{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb small">
+    {% if is_owner %}<li class="breadcrumb-item"><a href="{% url 'loans:mine' %}">My loans</a></li>
+    {% else %}<li class="breadcrumb-item"><a href="{% url 'loans:register' %}">Loan register</a></li>{% endif %}
+    <li class="breadcrumb-item active" aria-current="page">{{ loan.reference }}</li>
+  </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-4">
+  <div>
+    <h1 class="mb-1">{{ outstanding|ugx }} <small class="text-muted fs-6">outstanding</small></h1>
+    <div class="text-muted">
+      {{ loan.member.member_code }} &middot; {{ loan.member.full_name }} &middot;
+      {{ loan.principal|ugx }} borrowed &middot; {{ loan.period_months }} month{{ loan.period_months|pluralize }}
+      at {{ loan.interest_rate_percent|floatformat:"-2" }}% a month
+    </div>
+  </div>
+  <div class="fs-5">{% include "loans/_loan_status.html" with label=status_label %}</div>
+</div>
+
+{% if loan.status == "DEFAULTED" %}
+  <div class="alert alert-danger">
+    The agreed repayment period ended on {{ loan.final_due_date|date:"d M Y" }} with money still owed.
+    Under Manual 4.6 FCU may recover the balance, with interest, from the member's accumulated contributions.
+    Emergency contributions are never used.
+  </div>
+{% elif status_label == "Overdue" %}
+  <div class="alert alert-warning">An instalment is past its due date. Pay before {{ loan.final_due_date|date:"d M Y" }} to avoid default.</div>
+{% endif %}
+
+<div class="row g-4">
+  <div class="col-lg-7">
+    <div class="card fcu-card mb-4">
+      <div class="card-header">Repayment schedule</div>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead><tr><th>#</th><th>Due</th><th class="text-end">Due</th><th class="text-end">Paid</th><th class="text-end">Left</th><th></th></tr></thead>
+          <tbody>
+          {% for i in installments %}
+            <tr>
+              <td>{{ i.number }}</td>
+              <td>{{ i.due_date|date:"d M Y" }}</td>
+              <td class="text-end">{{ i.amount_due|ugx }}</td>
+              <td class="text-end">{{ i.amount_paid|ugx }}</td>
+              <td class="text-end fw-semibold">{{ i.remaining|ugx }}</td>
+              <td>
+                {% if i.remaining == 0 %}<span class="badge text-bg-success">Paid</span>
+                {% elif i.due_date < today %}<span class="badge text-bg-warning">Overdue</span>
+                {% elif i.amount_paid > 0 %}<span class="badge text-bg-info">Part paid</span>{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="card-body small text-muted border-top">
+        Principal and interest are in each instalment. Repayments cannot be extended after approval (Manual 4.5(c)).
+      </div>
+    </div>
+
+    <div class="card fcu-card">
+      <div class="card-header">Repayments and recoveries</div>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead><tr><th>Date</th><th>What</th><th class="text-end">Amount</th><th>Recorded by</th><th></th></tr></thead>
+          <tbody>
+          {% for r in repayments %}
+            <tr {% if r.reversed_at %}class="text-muted"{% endif %}>
+              <td class="text-nowrap">{{ r.payment_date|date:"d M Y" }}</td>
+              <td>
+                {% if r.kind == "SAVINGS_OFFSET" %}Recovered from savings{% else %}Repayment ({{ r.get_payment_method_display }}){% endif %}
+                {% if r.reference %}<div class="small">{{ r.reference }}</div>{% endif %}
+                {% if r.reversed_at %}<div class="small">Reversed {{ r.reversed_at|date:"d M Y" }}: {{ r.reversal_reason }}</div>{% endif %}
+              </td>
+              <td class="text-end">{% if r.reversed_at %}<s>{{ r.amount|ugx }}</s>{% else %}{{ r.amount|ugx }}{% endif %}</td>
+              <td class="small">{{ r.recorded_by|default:"System (automatic)" }}</td>
+              <td class="text-end">
+                {% if can_reverse and not r.reversed_at and r.recorded_by_id != user.pk %}
+                  <form method="post" class="d-inline-flex gap-1" action="{% url 'loans:repayment_reverse' r.pk %}">
+                    {% csrf_token %}
+                    <input type="text" name="reason" class="form-control form-control-sm" placeholder="Reason" required>
+                    <button class="btn btn-sm btn-outline-danger" type="submit">Reverse</button>
+                  </form>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5" class="text-center text-muted py-4">Nothing has been paid yet.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card fcu-card mb-4">
+      <div class="card-header">Loan</div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-6">Disbursed</dt><dd class="col-6">{{ loan.disbursed_on|date:"d M Y" }}</dd>
+          <dt class="col-6">Paid out by</dt><dd class="col-6">{{ loan.get_disbursement_method_display|default:loan.disbursement_method }}{% if loan.disbursement_reference %} ({{ loan.disbursement_reference }}){% endif %}</dd>
+          <dt class="col-6">Final due date</dt><dd class="col-6">{{ loan.final_due_date|date:"d M Y" }}</dd>
+          <dt class="col-6">Total to repay</dt><dd class="col-6">{{ loan.total_due|ugx }}</dd>
+          <dt class="col-6">Repaid so far</dt><dd class="col-6">{{ loan.total_paid|ugx }}</dd>
+          <dt class="col-6">Application</dt><dd class="col-6"><a href="{% url 'loans:detail' loan.application.pk %}">{{ loan.reference }}</a></dd>
+        </dl>
+      </div>
+    </div>
+
+    {% if can_record %}
+      <div class="card fcu-card mb-4">
+        <div class="card-header">Record a repayment</div>
+        <div class="card-body">
+          <form method="post" action="{% url 'loans:repay' loan.pk %}">
+            {% csrf_token %}
+            {% for field in repayment_form %}
+              <div class="mb-2">
+                <label class="form-label small mb-1" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+              </div>
+            {% endfor %}
+            <button class="btn btn-fcu-primary mt-2" type="submit">Record repayment</button>
+          </form>
+        </div>
+      </div>
+    {% endif %}
+
+    {% if preview and user.has_financial_view_access and loan.status == "DEFAULTED" %}
+      <div class="card fcu-card">
+        <div class="card-header">Recovery from savings</div>
+        <div class="card-body small">
+          Owed {{ preview.outstanding|ugx }}; available savings {{ preview.savings|ugx }};
+          recoverable now <strong>{{ preview.recoverable|ugx }}</strong>
+          {% if preview.shortfall %}(shortfall {{ preview.shortfall|ugx }} stays outstanding){% endif %}.
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

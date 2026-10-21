@@ -16,6 +16,16 @@
       permanently recorded.
     </div>
 
+    {% if blockers %}
+      <div class="alert alert-danger">
+        <strong>This cycle cannot be closed yet:</strong>
+        <ul class="mb-0 mt-2">
+          {% for blocker in blockers %}<li>{{ blocker }}</li>{% endfor %}
+        </ul>
+        <a href="{% url 'contributions:reversals' %}" class="alert-link">Open reversal requests</a>
+      </div>
+    {% endif %}
+
     {% if warnings %}
       <div class="alert alert-warning">
         <strong>Before you close, read these:</strong>
@@ -46,7 +56,7 @@
           </div>
 
           <div class="d-flex gap-2">
-            <button type="submit" class="btn btn-fcu-gold">Close and lock cycle</button>
+            <button type="submit" class="btn btn-fcu-gold" {% if blockers %}disabled{% endif %}>Close and lock cycle</button>
             <a href="{% url 'cycles:detail' cycle.pk %}" class="btn btn-outline-secondary">Cancel</a>
           </div>
         </form>

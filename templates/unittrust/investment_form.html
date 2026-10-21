@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}New investment{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb small">
+  <li class="breadcrumb-item"><a href="{% url 'unittrust:portfolio' %}">Investments</a></li>
+  <li class="breadcrumb-item active">New</li></ol></nav>
+<h1 class="mb-4">New investment</h1>
+<div class="row"><div class="col-lg-7"><div class="card fcu-card"><div class="card-body">
+  {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+  <form method="post" novalidate>{% csrf_token %}
+    {% for field in form %}
+      <div class="mb-3 {% if field.name == 'registered_in_fcu_name' %}form-check{% endif %}">
+        {% if field.name == "registered_in_fcu_name" %}{{ field }} <label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+        {% else %}<label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% endif %}
+        {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+        {% for e in field.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+      </div>
+    {% endfor %}
+    <button class="btn btn-fcu-primary" type="submit">Save</button>
+    <a href="{% url 'unittrust:portfolio' %}" class="btn btn-outline-secondary">Cancel</a>
+  </form>
+</div></div></div></div>
+{% endblock %}

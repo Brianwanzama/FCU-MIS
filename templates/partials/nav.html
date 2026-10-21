@@ -38,10 +38,44 @@
 
                 <li class="nav-item">
                     <a class="nav-link"
+                       href="{% url 'unittrust:portfolio' %}">
+                        Investments
+                    </a>
+                </li>
+
+                {% if user.has_financial_view_access %}
+                <li class="nav-item">
+                    <a class="nav-link"
+                       href="{% url 'reports:index' %}">
+                        Reports
+                    </a>
+                </li>
+                {% endif %}
+
+                <li class="nav-item">
+                    <a class="nav-link"
                        href="{% url 'documents:library' %}">
                         Documents
                     </a>
                 </li>
+
+                {% if user.member_id %}
+
+                <li class="nav-item">
+                    <a class="nav-link"
+                       href="{% url 'members:mine' %}">
+                        My Finances
+                    </a>
+                </li>
+
+                <li class="nav-item">
+                    <a class="nav-link"
+                       href="{% url 'loans:mine' %}">
+                        Loans
+                    </a>
+                </li>
+
+                {% endif %}
 
                 {% if user.has_financial_write_access %}
 
@@ -52,10 +86,21 @@
                     </a>
                 </li>
 
+                {% endif %}
+
+                {% if user.has_financial_view_access %}
+
                 <li class="nav-item">
                     <a class="nav-link"
                        href="{% url 'contributions:list' %}">
                         Contributions
+                    </a>
+                </li>
+
+                <li class="nav-item">
+                    <a class="nav-link"
+                       href="{% url 'loans:register' %}">
+                        Loan Register
                     </a>
                 </li>
 

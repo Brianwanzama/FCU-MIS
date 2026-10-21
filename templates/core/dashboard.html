@@ -170,25 +170,34 @@
 
                     <p>
 
-                        <strong>Target</strong><br>
+                        <strong>Deposit target</strong><br>
 
-                        UGX {{ current_cycle.unit_target }}
-
-                    </p>
-
-                    <p>
-
-                        <strong>Collected</strong><br>
-
-                        UGX {{ summary.collected }}
+                        {{ summary.expected|ugx }}
 
                     </p>
 
                     <p>
 
-                        <strong>Outstanding</strong><br>
+                        <strong>Deposits collected</strong><br>
 
-                        UGX {{ summary.outstanding }}
+                        {{ summary.collected|ugx }}
+
+                    </p>
+
+                    <p>
+
+                        <strong>Deposits outstanding</strong><br>
+
+                        {{ summary.outstanding|ugx }}
+
+                    </p>
+
+                    <p>
+
+                        <strong>Emergency collected</strong><br>
+
+                        {{ summary.emergency_collected|ugx }}
+                        of {{ summary.emergency_expected|ugx }}
 
                     </p>
 
@@ -337,7 +346,7 @@
 
                                 <td>
 
-                                    UGX {{ contribution.amount }}
+                                    {{ contribution.amount|ugx }}
 
                                 </td>
 

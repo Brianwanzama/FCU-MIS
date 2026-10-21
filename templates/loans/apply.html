@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Apply for a loan{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb small">
+    <li class="breadcrumb-item"><a href="{% url 'loans:mine' %}">My loans</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Apply</li>
+  </ol>
+</nav>
+
+<h1 class="mb-4">Apply for a loan</h1>
+
+<div class="row g-4">
+  <div class="col-lg-7">
+    <div class="card fcu-card">
+      <div class="card-body">
+
+        <div class="alert alert-light border small">
+          Download the forms from
+          <a href="{% url 'loans:mine' %}">My loans</a>, fill and sign them, scan them, then attach them here.
+          By signing the Loan Application Form and the Declaration you authorise FCU to recover any unpaid
+          balance, with interest, from your accumulated contributions (Manual 4.6).
+        </div>
+
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">
+            {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+          </div>
+        {% endif %}
+
+        <form method="post" enctype="multipart/form-data" novalidate>
+          {% csrf_token %}
+          {% for field in form %}
+            {% if field.name != "undertaking_file" or not has_undertaking %}
+              <div class="mb-3">
+                <label for="{{ field.id_for_label }}" class="form-label">
+                  {{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}
+                </label>
+                {{ field }}
+                {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                {% for error in field.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+              </div>
+            {% endif %}
+          {% endfor %}
+
+          {% if has_undertaking %}
+            <p class="small text-muted">Your signed Declaration is already on file.</p>
+          {% endif %}
+
+          <div class="d-flex gap-2 flex-wrap">
+            <button type="submit" name="preview" value="1" class="btn btn-outline-secondary">Check eligibility and repayments</button>
+            <button type="submit" class="btn btn-fcu-gold">Submit application</button>
+            <a href="{% url 'loans:mine' %}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+          <div class="form-text mt-2">Your file choices are not kept when you check eligibility, so choose them again before submitting.</div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card fcu-card mb-4">
+      <div class="card-header">Eligibility</div>
+      {% include "loans/_checks.html" %}
+    </div>
+
+    {% if schedule %}
+      <div class="card fcu-card">
+        <div class="card-header">Repayment preview</div>
+        {% include "loans/_schedule.html" %}
+        <div class="card-body small text-muted">
+          5% a month on the outstanding balance, equal monthly instalments. The final schedule is fixed when the loan is approved.
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

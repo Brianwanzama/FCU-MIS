@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}{{ application.reference }}{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb small">
+    {% if is_owner %}
+      <li class="breadcrumb-item"><a href="{% url 'loans:mine' %}">My loans</a></li>
+    {% else %}
+      <li class="breadcrumb-item"><a href="{% url 'loans:applications' %}">Loan applications</a></li>
+    {% endif %}
+    <li class="breadcrumb-item active" aria-current="page">{{ application.reference }}</li>
+  </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-4">
+  <div>
+    <h1 class="mb-1">{{ application.amount_approved|default:application.amount_requested|ugx }}</h1>
+    <div class="text-muted">
+      {{ application.member.member_code }} &middot; {{ application.member.full_name }}
+      &middot; {{ application.period_months }} month{{ application.period_months|pluralize }}
+    </div>
+  </div>
+  <div>
+    {% if application.status == "APPROVED" %}<span class="badge text-bg-success fs-6">Approved</span>
+    {% elif application.status == "REJECTED" %}<span class="badge text-bg-danger fs-6">Rejected</span>
+    {% elif application.status == "WITHDRAWN" %}<span class="badge text-bg-secondary fs-6">Withdrawn</span>
+    {% elif application.status == "DISBURSED" %}<span class="badge text-bg-primary fs-6">Paid out</span>
+    {% else %}<span class="badge text-bg-warning fs-6">Awaiting decision</span>{% endif %}
+  </div>
+</div>
+
+{% if application.status == "DISBURSED" %}
+  <div class="alert alert-primary">
+    This loan has been paid out. <a href="{% url 'loans:loan' application.loan.pk %}">Open the loan and its repayment schedule.</a>
+  </div>
+{% endif %}
+
+{% if application.status == "APPROVED" or application.status == "DISBURSED" %}
+  <div class="alert alert-success">
+    Approved on {{ application.decided_at|date:"d M Y" }}. Interest {{ application.interest_rate_percent|floatformat:"-2" }}% a month on the
+    outstanding balance; {{ application.installment_amount|ugx }} a month. Repayments are fixed and cannot be extended (Manual 4.5(c)).
+    {% if application.decision_note %}<div class="mt-1">Comments: {{ application.decision_note }}</div>{% endif %}
+  </div>
+{% elif application.status == "REJECTED" %}
+  <div class="alert alert-danger">
+    Rejected on {{ application.decided_at|date:"d M Y" }}.
+    <div class="mt-1">Reason: {{ application.decision_note }}</div>
+  </div>
+{% endif %}
+
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card fcu-card mb-4">
+      <div class="card-header">Application</div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-5">Reference</dt><dd class="col-7">{{ application.reference }}</dd>
+          <dt class="col-5">Submitted</dt><dd class="col-7">{{ application.submitted_at|date:"d M Y H:i" }}</dd>
+          <dt class="col-5">Cycle</dt><dd class="col-7">{{ application.cycle }}</dd>
+          <dt class="col-5">Amount requested</dt><dd class="col-7">{{ application.amount_requested|ugx }}</dd>
+          <dt class="col-5">Repayment period</dt><dd class="col-7">{{ application.period_months }} month{{ application.period_months|pluralize }}</dd>
+          <dt class="col-5">Application form</dt>
+          <dd class="col-7"><a href="{% url 'loans:file' 'application' application.pk %}">{{ application.application_form_name }}</a></dd>
+          <dt class="col-5">Signed Declaration</dt>
+          <dd class="col-7">
+            <a href="{% url 'loans:file' 'undertaking' application.undertaking.pk %}">Download</a>
+            ({{ application.undertaking.get_status_display }})
+          </dd>
+        </dl>
+      </div>
+    </div>
+
+    {% if is_owner and application.status == "SUBMITTED" %}
+      <form method="post" action="{% url 'loans:withdraw' application.pk %}"
+            onsubmit="return confirm('Withdraw this application?');">
+        {% csrf_token %}
+        <button class="btn btn-outline-danger" type="submit">Withdraw application</button>
+      </form>
+    {% endif %}
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card fcu-card mb-4">
+      <div class="card-header">{% if schedule_is_final %}Repayment schedule{% else %}Repayment schedule (preview){% endif %}</div>
+      {% include "loans/_schedule.html" %}
+    </div>
+
+    {% if checks %}
+      <div class="card fcu-card mb-4">
+        <div class="card-header">Eligibility today</div>
+        {% with result=checks %}{% include "loans/_checks.html" %}{% endwith %}
+        <div class="card-body border-top small">
+          Limit: {{ checks.limit|ugx }} ({{ checks.percent|floatformat:"-1" }}% of {{ checks.pool|ugx }} deposits).
+        </div>
+      </div>
+    {% endif %}
+
+    {% if can_disburse %}
+      <div class="card fcu-card mb-4">
+        <div class="card-header">Pay out the loan</div>
+        <div class="card-body">
+          <form method="post" action="{% url 'loans:disburse' application.pk %}">
+            {% csrf_token %}
+            {% for field in disbursement_form %}
+              <div class="mb-2">
+                <label class="form-label small mb-1" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+              </div>
+            {% endfor %}
+            <button class="btn btn-fcu-gold mt-2" type="submit">Record disbursement</button>
+          </form>
+          <div class="form-text mt-2">The schedule starts from the date paid out and must finish inside the running cycle.</div>
+        </div>
+      </div>
+    {% endif %}
+
+    {% if can_decide %}
+      <div class="card fcu-card">
+        <div class="card-header">Decision</div>
+        <div class="card-body">
+          <form method="post">
+            {% csrf_token %}
+            {% for field in decision_form %}
+              <div class="mb-3">
+                <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                <div class="form-text">{{ field.help_text }}</div>
+              </div>
+            {% endfor %}
+            <div class="d-flex gap-2">
+              <button class="btn btn-success" type="submit" formaction="{% url 'loans:decision' application.pk 'approve' %}">Approve</button>
+              <button class="btn btn-outline-danger" type="submit" formaction="{% url 'loans:decision' application.pk 'reject' %}">Reject</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+
+{% block content %}
+<h1 class="mb-1">Reports</h1>
+<p class="text-muted">The Treasurer presents a financial report to members twice a year (Manual 10.2). Each cycle is six months, so each cycle has its own report.</p>
+
+<div class="row g-4">
+  <div class="col-lg-8">
+    <div class="card fcu-card">
+      <div class="card-header">Cycle reports</div>
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <thead><tr><th>Cycle</th><th>Period</th><th>Status</th><th class="text-end">Download</th></tr></thead>
+          <tbody>
+          {% for c in cycles %}
+            <tr>
+              <td><a href="{% url 'reports:cycle' c.pk %}">Cycle {{ c.cycle_number }} &middot; {{ c.name }}</a></td>
+              <td>{{ c.start_date|date:"d M Y" }} &ndash; {{ c.end_date|date:"d M Y" }}</td>
+              <td>{{ c.get_status_display }}</td>
+              <td class="text-end text-nowrap">
+                <a class="btn btn-sm btn-outline-secondary" href="{% url 'reports:cycle_pdf' c.pk %}">PDF</a>
+                <a class="btn btn-sm btn-outline-secondary" href="{% url 'reports:cycle_excel' c.pk %}">Excel</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="4" class="text-center text-muted py-5">No cycle has begun yet.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card fcu-card">
+      <div class="card-header">Excel exports</div>
+      <div class="list-group list-group-flush">
+        <a class="list-group-item list-group-item-action" href="{% url 'reports:export_contributions' %}">All contributions</a>
+        <a class="list-group-item list-group-item-action" href="{% url 'reports:export_loans' %}">Loans and repayments</a>
+        <a class="list-group-item list-group-item-action" href="{% url 'reports:export_investments' %}">Investments and transactions</a>
+      </div>
+      <div class="card-body small text-muted border-top">
+        A member's own statement (PDF or Excel) is on their page under Statement.
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

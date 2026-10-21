@@ -248,15 +248,170 @@ class UnitTargetTests(TestCase):
     inventing a second one.
     """
 
-    def test_unit_target_is_per_member_target_times_active_members(self):
+    def test_unit_targets_are_per_member_targets_times_active_members(self):
         active = Member.objects.filter(status=Member.Status.ACTIVE).count()
         self.assertEqual(active, 19)  # the real FCU roster
 
         c = services.create_cycle(make_cycle(1, date(2026, 1, 1)))
         self.assertEqual(c.per_member_target, Decimal("630000.00"))
-        self.assertEqual(c.unit_target, Decimal("11970000.00"))  # 630,000 x 19
+        self.assertEqual(c.unit_deposit_target, Decimal("11400000"))  # 600,000 x 19
+        self.assertEqual(c.unit_emergency_target, Decimal("570000"))  # 30,000 x 19
 
-    def test_unit_target_moves_when_a_member_goes_inactive(self):
+    def test_unit_targets_move_when_a_member_goes_inactive(self):
         c = services.create_cycle(make_cycle(1, date(2026, 1, 1)))
         Member.objects.filter(member_code="FCU019").update(status=Member.Status.INACTIVE)
-        self.assertEqual(c.unit_target, Decimal("11340000.00"))  # 630,000 x 18
+        self.assertEqual(c.unit_deposit_target, Decimal("10800000"))  # 600,000 x 18
+        self.assertEqual(c.unit_emergency_target, Decimal("540000"))  # 30,000 x 18
+
+
+class MembershipRecordTests(TestCase):
+    """Targets follow the cycle's own membership record, not today's headcount."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.admin = User.objects.create_user(
+            username="cyc_admin", password="x", role=User.Role.ADMINISTRATOR
+        )
+
+    def cycle(self, number=1, start=date(2026, 1, 1)):
+        return services.create_cycle(make_cycle(number, start), actor=self.admin)
+
+    def test_activation_records_the_active_members(self):
+        c = self.cycle()
+        services.activate_cycle(c, actor=self.admin)
+        self.assertEqual(c.memberships.count(), 19)
+        self.assertEqual(c.eligible_member_count, 19)
+
+    def test_later_headcount_changes_do_not_rewrite_the_cycle_targets(self):
+        c = self.cycle()
+        services.activate_cycle(c, actor=self.admin)
+        Member.objects.filter(member_code="FCU019").update(status=Member.Status.INACTIVE)
+        self.assertEqual(c.unit_deposit_target, Decimal("11400000"))  # still 19 x 600,000
+
+    def test_closed_cycle_targets_stay_fixed(self):
+        c = self.cycle()
+        services.activate_cycle(c, actor=self.admin)
+        services.close_cycle(c, actor=self.admin)
+        Member.objects.filter(member_code__in=["FCU001", "FCU002"]).update(
+            status=Member.Status.WITHDRAWN
+        )
+        c.refresh_from_db()
+        self.assertEqual(c.unit_deposit_target, Decimal("11400000"))
+
+    def test_upcoming_cycle_projects_the_current_headcount(self):
+        c = self.cycle()
+        self.assertEqual(c.eligible_member_count, 19)
+        Member.objects.filter(member_code="FCU019").update(status=Member.Status.INACTIVE)
+        self.assertEqual(c.eligible_member_count, 18)
+
+    def test_a_member_who_joins_mid_cycle_owes_the_full_amount(self):
+        c = self.cycle()
+        services.activate_cycle(c, actor=self.admin)
+        Member.objects.create(full_name="New Joiner", joined_date=date(2026, 3, 1))
+        self.assertEqual(c.eligible_member_count, 20)
+        self.assertEqual(c.unit_deposit_target, Decimal("600000") * 20)
+
+    def test_a_member_who_withdraws_stops_counting_but_keeps_their_record(self):
+        c = self.cycle()
+        services.activate_cycle(c, actor=self.admin)
+        m = Member.objects.get(member_code="FCU019")
+        m.status = Member.Status.WITHDRAWN
+        m.save()
+        self.assertEqual(c.eligible_member_count, 18)
+        row = c.memberships.get(member=m)
+        self.assertIsNotNone(row.left_on)
+
+    def test_closing_only_assesses_the_cycles_members_in_the_warning(self):
+        c = self.cycle()
+        services.activate_cycle(c, actor=self.admin)
+        from apps.members.services import members_failing_cycle_target
+
+        self.assertEqual(len(members_failing_cycle_target(c)), 19)  # nobody has paid
+
+
+class DateChangeAndCloseChecksTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.admin = User.objects.create_user(
+            username="dc_admin", password="x", role=User.Role.ADMINISTRATOR
+        )
+        cls.chair = User.objects.create_user(
+            username="dc_chair", password="x", role=User.Role.CHAIRPERSON
+        )
+        cls.cycle = services.create_cycle(make_cycle(1, date(2026, 1, 1)), actor=cls.admin)
+        services.activate_cycle(cls.cycle, actor=cls.admin)
+        cls.member = Member.objects.order_by("member_code").first()
+
+    def pay(self, month):
+        from apps.contributions import services as cs
+        from apps.contributions.models import Contribution
+
+        return cs.record_contribution(
+            Contribution(
+                member=self.member, cycle=self.cycle, contribution_type="MONTHLY",
+                amount=Decimal("100000"), period_month=month, payment_date=date(2026, 1, 5),
+                payment_method="CASH", recorded_by=self.admin,
+            ),
+            actor=self.admin,
+        )
+
+    def move_start(self, new_start):
+        old = services._snapshot(Cycle.objects.get(pk=self.cycle.pk))
+        self.cycle.start_date = new_start
+        services.update_cycle(self.cycle, old, actor=self.admin)
+
+    def test_moving_the_dates_flags_payments_that_fall_outside(self):
+        self.pay(date(2026, 1, 1))
+        self.pay(date(2026, 6, 1))
+        self.assertEqual(self.cycle.out_of_range_payments().count(), 0)
+        self.move_start(date(2026, 3, 1))  # now covers Mar-Aug: January falls out
+        self.assertEqual(self.cycle.out_of_range_payments().count(), 1)
+
+    def test_date_change_is_audited_with_the_flagged_payments(self):
+        c = self.pay(date(2026, 1, 1))
+        self.move_start(date(2026, 3, 1))
+        from apps.auditlog.models import AuditLog
+
+        e = AuditLog.objects.filter(new_value__event="CYCLE_DATES_CHANGED").latest("pk")
+        self.assertEqual(e.new_value["payments_flagged_for_review"], [c.pk])
+        self.assertEqual(e.old_value["start_date"], "2026-01-01")
+
+    def test_targets_recalculate_when_the_duration_changes(self):
+        old = services._snapshot(Cycle.objects.get(pk=self.cycle.pk))
+        self.cycle.duration_months = 6
+        self.cycle.monthly_savings_amount = Decimal("120000")
+        services.update_cycle(self.cycle, old, actor=self.admin)
+        self.assertEqual(self.cycle.member_deposit_target, Decimal("720000"))
+        self.assertEqual(self.cycle.unit_deposit_target, Decimal("720000") * 19)
+
+    def test_close_is_blocked_while_a_reversal_is_pending(self):
+        from apps.contributions import services as cs
+
+        c = self.pay(date(2026, 1, 1))
+        cs.request_reversal(c, self.admin, "Duplicate")
+        self.assertTrue(self.cycle.hard_blockers_for_close())
+        with self.assertRaises(services.CycleTransitionError):
+            services.close_cycle(self.cycle, actor=self.admin)
+
+    def test_close_works_once_the_reversal_is_decided(self):
+        from apps.contributions import services as cs
+
+        c = self.pay(date(2026, 1, 1))
+        r = cs.request_reversal(c, self.admin, "Duplicate")
+        cs.approve_reversal(r, self.chair)
+        services.close_cycle(self.cycle, actor=self.admin)
+        self.assertEqual(self.cycle.status, Cycle.Status.CLOSED)
+
+    def test_close_warnings_list_outstanding_amounts_and_flagged_payments(self):
+        self.pay(date(2026, 1, 1))
+        self.move_start(date(2026, 3, 1))
+        text = " ".join(self.cycle.blocking_issues_for_close())
+        self.assertIn("Deposits outstanding", text)
+        self.assertIn("outside this cycle's dates", text)
+
+    def test_cycle_detail_and_close_pages_render(self):
+        self.pay(date(2026, 1, 1))
+        self.move_start(date(2026, 3, 1))
+        self.client.login(username="dc_admin", password="x")
+        self.assertContains(self.client.get(f"/cycles/{self.cycle.pk}/"), "outside this cycle")
+        self.assertEqual(self.client.get(f"/cycles/{self.cycle.pk}/close/").status_code, 200)

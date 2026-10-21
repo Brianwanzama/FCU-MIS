@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}{{ investment.name }}{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb small">
+  <li class="breadcrumb-item"><a href="{% url 'unittrust:portfolio' %}">Investments</a></li>
+  <li class="breadcrumb-item active">{{ investment.name }}</li></ol></nav>
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-4">
+  <div>
+    <h1 class="mb-1">{{ investment.name }}</h1>
+    <div class="text-muted">{{ investment.get_kind_display }}{% if investment.provider %} &middot; {{ investment.provider }}{% endif %}
+      &middot; opened {{ investment.opened_on|date:"d M Y" }}
+      {% if investment.registered_in_fcu_name %}&middot; registered in FCU's name{% else %}&middot; <span class="text-danger">not registered in FCU's name</span>{% endif %}</div>
+  </div>
+  <div>{% if investment.status == "CLOSED" %}<span class="badge text-bg-secondary fs-6">Closed</span>{% else %}<span class="badge text-bg-success fs-6">Active</span>{% endif %}</div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-3"><div class="card fcu-card"><div class="card-body"><small class="text-muted">Invested</small><div class="fs-5 fw-semibold">{{ pos.invested|ugx }}</div></div></div></div>
+  <div class="col-md-3"><div class="card fcu-card"><div class="card-body"><small class="text-muted">Worth now{% if pos.valued_on %} ({{ pos.valued_on|date:"d M Y" }}){% endif %}</small><div class="fs-5 fw-semibold">{{ pos.market_value|ugx }}</div></div></div></div>
+  <div class="col-md-3"><div class="card fcu-card"><div class="card-body"><small class="text-muted">Earnings received</small><div class="fs-5 fw-semibold">{{ pos.income|ugx }}</div></div></div></div>
+  <div class="col-md-3"><div class="card fcu-card"><div class="card-body"><small class="text-muted">Total return</small><div class="fs-5 fw-semibold">{{ pos.total_return|ugx }} <small class="text-muted">({{ pos.return_percent }}%)</small></div></div></div></div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-8">
+    {% if can_see_transactions %}
+    <div class="card fcu-card">
+      <div class="card-header">Transactions</div>
+      <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+        <thead><tr><th>Date</th><th>What</th><th class="text-end">Amount</th><th>By</th><th></th></tr></thead>
+        <tbody>
+        {% for t in transactions %}
+          <tr {% if t.reversed_at %}class="text-muted"{% endif %}>
+            <td class="text-nowrap">{{ t.transaction_date|date:"d M Y" }}</td>
+            <td>{{ t.get_kind_display }}{% if t.reference %}<div class="small">{{ t.reference }}</div>{% endif %}
+              {% if t.notes %}<div class="small">{{ t.notes }}</div>{% endif %}
+              {% if t.reversed_at %}<div class="small">Reversed {{ t.reversed_at|date:"d M Y" }}: {{ t.reversal_reason }}</div>{% endif %}</td>
+            <td class="text-end">{% if t.reversed_at %}<s>{{ t.amount|ugx }}</s>{% else %}{{ t.amount|ugx }}{% endif %}</td>
+            <td class="small">{{ t.recorded_by }}</td>
+            <td class="text-end">
+              {% if can_reverse and not t.reversed_at and t.recorded_by_id != user.pk %}
+                <form method="post" class="d-inline-flex gap-1" action="{% url 'unittrust:transaction_reverse' t.pk %}">{% csrf_token %}
+                  <input type="text" name="reason" class="form-control form-control-sm" placeholder="Reason" required>
+                  <button class="btn btn-sm btn-outline-danger" type="submit">Reverse</button></form>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}<tr><td colspan="5" class="text-center text-muted py-4">No transactions yet.</td></tr>{% endfor %}
+        </tbody></table></div>
+    </div>
+    {% else %}
+      <div class="alert alert-light border">Transaction details are available to the Administrator, Treasurer and Chairperson.</div>
+    {% endif %}
+  </div>
+
+  <div class="col-lg-4">
+    {% if can_record %}
+    <div class="card fcu-card mb-4">
+      <div class="card-header">Record a transaction</div>
+      <div class="card-body">
+        <form method="post" action="{% url 'unittrust:transaction' investment.pk %}">{% csrf_token %}
+          {% for field in form %}<div class="mb-2"><label class="form-label small mb-1" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}</div>{% endfor %}
+          <div class="form-text mb-2">For a market value update, enter the total value of the holding on that date.</div>
+          <button class="btn btn-fcu-primary" type="submit">Record</button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+    {% if user.has_chairperson_access and investment.status == "ACTIVE" %}
+      <form method="post" action="{% url 'unittrust:close' investment.pk %}" onsubmit="return confirm('Close this investment?');">{% csrf_token %}
+        <button class="btn btn-outline-secondary btn-sm" type="submit">Close investment</button></form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

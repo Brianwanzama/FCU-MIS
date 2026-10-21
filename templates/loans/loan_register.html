@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Loan register{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+  <h1 class="mb-0">Loan register</h1>
+  <a href="{% url 'loans:applications' %}" class="btn btn-outline-secondary">Applications</a>
+</div>
+
+<div class="card fcu-card mb-4 {% if overdue %}border-danger{% endif %}">
+  <div class="card-header">Past their agreed repayment period ({{ overdue|length }})</div>
+  {% if overdue %}
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0">
+        <thead><tr><th>Loan</th><th>Member</th><th>Ended</th><th class="text-end">Owed</th><th class="text-end">Savings available</th><th class="text-end">Would recover</th></tr></thead>
+        <tbody>
+        {% for row in overdue %}
+          <tr>
+            <td><a href="{% url 'loans:loan' row.loan.pk %}">{{ row.loan.reference }}</a></td>
+            <td>{{ row.loan.member.member_code }} &middot; {{ row.loan.member.full_name }}</td>
+            <td>{{ row.loan.final_due_date|date:"d M Y" }}</td>
+            <td class="text-end">{{ row.preview.outstanding|ugx }}</td>
+            <td class="text-end">{{ row.preview.savings|ugx }}</td>
+            <td class="text-end fw-semibold">{{ row.preview.recoverable|ugx }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="card-body text-muted">No loan is past its agreed repayment period.</div>
+  {% endif %}
+  <div class="card-body border-top small">
+    {% if recovery_enabled %}
+      Automatic recovery is <strong>on</strong>: it runs every day with nobody logged in, taking the amount owed (principal and
+      interest) from the member's savings across all cycles. Emergency contributions are never used.
+      {% if can_run and overdue %}
+        <form method="post" action="{% url 'loans:recovery_run' %}" class="mt-2"
+              onsubmit="return confirm('Recover the amounts above from members\' savings now?');">
+          {% csrf_token %}
+          <button class="btn btn-danger btn-sm" type="submit">Run recovery now</button>
+        </form>
+      {% endif %}
+    {% else %}
+      Automatic recovery is <strong>off</strong> until FCU confirms the recovery policy, so nothing is taken. The figures above show what it would recover.
+    {% endif %}
+  </div>
+</div>
+
+<div class="card fcu-card">
+  <div class="card-header">All loans</div>
+  <div class="table-responsive">
+    <table class="table align-middle mb-0">
+      <thead><tr><th>Loan</th><th>Member</th><th>Disbursed</th><th class="text-end">Principal</th><th class="text-end">Outstanding</th><th>Final due</th><th>Status</th></tr></thead>
+      <tbody>
+      {% for loan in loans %}
+        <tr>
+          <td><a href="{% url 'loans:loan' loan.pk %}">{{ loan.reference }}</a></td>
+          <td>{{ loan.member.member_code }} &middot; {{ loan.member.full_name }}</td>
+          <td>{{ loan.disbursed_on|date:"d M Y" }}</td>
+          <td class="text-end">{{ loan.principal|ugx }}</td>
+          <td class="text-end">{{ loan.outstanding|ugx }}</td>
+          <td>{{ loan.final_due_date|date:"d M Y" }}</td>
+          <td>{% include "loans/_loan_status.html" with label=loan.display_status %}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7" class="text-center text-muted py-5">No loans have been disbursed yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

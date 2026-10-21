@@ -2,7 +2,7 @@
 {% block title %}Document Library{% endblock %}
 {% block content %}
 <h2 class="fcu-display">Document Library</h2>
-<p class="text-muted">Official FCU templates. Complete, print, and sign physically — these downloads are the blank forms, not a digital submission (FR-17).</p>
+<p class="text-muted">Official FCU templates. Download, complete and sign them, then scan and upload them on the <a href="{% url 'loans:mine' %}">Loans page</a> when you apply for a loan.</p>
 
 <div class="list-group">
   {% for doc in templates %}

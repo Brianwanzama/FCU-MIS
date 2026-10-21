@@ -1,4 +1,7 @@
+from django.core.exceptions import ImproperlyConfigured
+
 from .base import *  # noqa: F401,F403
+from .base import BASE_DIR, SECRET_KEY, env  # noqa: F401
 
 # ---------------------------------------------------------------------
 # Production
@@ -6,25 +9,34 @@ from .base import *  # noqa: F401,F403
 
 DEBUG = False
 
-# Railway domain(s)
+if SECRET_KEY.startswith("unsafe") or len(SECRET_KEY) < 32:
+    raise ImproperlyConfigured(
+        "Set DJANGO_SECRET_KEY to a long random value (at least 32 characters) before "
+        "running in production."
+    )
+
+# Railway domains, plus any custom domain listed in DJANGO_ALLOWED_HOSTS.
 ALLOWED_HOSTS = [
-    "fcu-mis-production.up.railway.app",
     ".up.railway.app",
+    "healthcheck.railway.app",
     "localhost",
     "127.0.0.1",
-]
+] + env.list("DJANGO_ALLOWED_HOSTS", default=[])
 
-# CSRF trusted origins
+# Origins allowed to POST forms: Railway domains plus DJANGO_CSRF_TRUSTED_ORIGINS
+# (full URLs, e.g. https://mis.example.org).
 CSRF_TRUSTED_ORIGINS = [
-    "https://fcu-mis-production.up.railway.app",
     "https://*.up.railway.app",
-]
+] + env.list("DJANGO_CSRF_TRUSTED_ORIGINS", default=[])
 
 # ---------------------------------------------------------------------
 # Security
 # ---------------------------------------------------------------------
 
 SECURE_SSL_REDIRECT = True
+
+# The platform's health check calls over plain HTTP inside the network.
+SECURE_REDIRECT_EXEMPT = [r"^healthz/$"]
 
 SESSION_COOKIE_SECURE = True
 
@@ -46,10 +58,26 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 USE_X_FORWARDED_HOST = True
 
+# Keep connections open between requests instead of reconnecting every time.
+DATABASES["default"]["CONN_MAX_AGE"] = 60  # noqa: F405
+
 # ---------------------------------------------------------------------
-# Static files
+# Static files (Django 6 reads STORAGES; the old STATICFILES_STORAGE is ignored)
 # ---------------------------------------------------------------------
 
-STATICFILES_STORAGE = (
-    "whitenoise.storage.CompressedManifestStaticFilesStorage"
-)
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+}
+
+# ---------------------------------------------------------------------
+# Logging: everything to the console, where Railway collects it.
+# ---------------------------------------------------------------------
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {"plain": {"format": "%(asctime)s %(levelname)s %(name)s %(message)s"}},
+    "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "plain"}},
+    "root": {"handlers": ["console"], "level": env("DJANGO_LOG_LEVEL", default="INFO")},
+}

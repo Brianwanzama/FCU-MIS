@@ -109,6 +109,58 @@ class User(AbstractUser):
         )
 
     @property
+    def has_financial_view_access(self):
+        """View every member's financial records (contribution register)."""
+        return self.role in (
+            self.Role.ADMINISTRATOR,
+            self.Role.TREASURER,
+            self.Role.CHAIRPERSON,
+        )
+
+    def can_view_member_finances(self, member):
+        """
+        A member sees only their own financial records. The Administrator,
+        Treasurer and Chairperson can see everyone's.
+        """
+        if self.has_financial_view_access:
+            return True
+
+        return self.member_id is not None and self.member_id == member.pk
+
+    @property
+    def can_edit_contributions(self):
+        """Correct an existing contribution (reason required, fully audited)."""
+        return self.has_financial_view_access
+
+    @property
+    def can_request_reversal(self):
+        """Ask for a contribution to be reversed. Needs approval to take effect."""
+        return self.has_financial_view_access
+
+    @property
+    def can_approve_reversal(self):
+        """Approve or reject a reversal request. The Treasurer cannot."""
+        return self.role in (
+            self.Role.ADMINISTRATOR,
+            self.Role.CHAIRPERSON,
+        )
+
+    @property
+    def can_approve_loans(self):
+        """Approve or reject loan applications (Administrator or Chairperson)."""
+        return self.has_chairperson_access
+
+    @property
+    def can_verify_undertakings(self):
+        """Check a member's signed Declaration and Commitment Agreement."""
+        return self.role in (
+            self.Role.ADMINISTRATOR,
+            self.Role.TREASURER,
+            self.Role.CHAIRPERSON,
+            self.Role.SECRETARY,
+        )
+
+    @property
     def has_secretariat_access(self):
         """
         Member administration, correspondence,

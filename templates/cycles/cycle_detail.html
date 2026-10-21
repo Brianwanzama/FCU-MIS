@@ -97,7 +97,7 @@
           <dd class="col-sm-7">
             {{ cycle.payment_window_closes|date:"d M Y" }}
             <div class="text-muted small">
-              Manual 3.2 &mdash; a month's contribution may arrive up to the 5th of the
+              Manual 3.2 &mdash; a month's contribution may arrive up to the 10th of the
               following month, which is after this cycle's own end date.
             </div>
           </dd>
@@ -126,33 +126,79 @@
       <div class="card-body">
         <dl class="row mb-0">
           <dt class="col-7">Monthly savings</dt>
-          <dd class="col-5 text-end">UGX {{ cycle.monthly_savings_amount|floatformat:0|intcomma }}</dd>
+          <dd class="col-5 text-end">{{ cycle.monthly_savings_amount|ugx }}</dd>
 
           <dt class="col-7">Monthly emergency</dt>
-          <dd class="col-5 text-end">UGX {{ cycle.monthly_emergency_amount|floatformat:0|intcomma }}</dd>
+          <dd class="col-5 text-end">{{ cycle.monthly_emergency_amount|ugx }}</dd>
 
           <dt class="col-7">Months</dt>
           <dd class="col-5 text-end">&times; {{ cycle.duration_months }}</dd>
         </dl>
         <hr>
         <dl class="row mb-0">
-          <dt class="col-7 fcu-display">Target per member</dt>
-          <dd class="col-5 text-end fw-bold">
-            UGX {{ cycle.per_member_target|floatformat:0|intcomma }}
-          </dd>
+          <dt class="col-7 fcu-display">Deposit target per member</dt>
+          <dd class="col-5 text-end fw-bold">{{ cycle.member_deposit_target|ugx }}</dd>
 
-          <dt class="col-7">Unit-wide target</dt>
-          <dd class="col-5 text-end">UGX {{ cycle.unit_target|floatformat:0|intcomma }}</dd>
+          <dt class="col-7">Emergency obligation per member</dt>
+          <dd class="col-5 text-end">{{ cycle.member_emergency_target|ugx }}</dd>
+
+          <dt class="col-7 fcu-display">Unit deposit target</dt>
+          <dd class="col-5 text-end fw-bold">{{ cycle.unit_deposit_target|ugx }}</dd>
+
+          <dt class="col-7">Unit emergency obligation</dt>
+          <dd class="col-5 text-end">{{ cycle.unit_emergency_target|ugx }}</dd>
         </dl>
         <p class="text-muted small mb-0 mt-3">
-          The unit-wide figure is the per-member target multiplied by the number of
-          currently Active members. It is calculated on the fly, not stored, because
-          membership changes during a cycle.
+          Unit-wide figures are the per-member targets multiplied by the number of
+          eligible members ({{ cycle.eligible_member_count }}), taken from this cycle's own
+          membership record, so they do not change when members later join or leave.
+          Deposits and emergency contributions are always reported separately.
         </p>
       </div>
     </div>
   </div>
 </div>
+
+{% if out_of_range_count %}
+  <div class="card fcu-card mt-4 border-warning">
+    <div class="card-header">Payments outside this cycle's dates ({{ out_of_range_count }})</div>
+    <div class="card-body p-0">
+      <table class="table table-sm mb-0">
+        <thead><tr><th>Member</th><th>Month paid for</th><th class="text-end">Amount</th><th></th></tr></thead>
+        <tbody>
+        {% for c in out_of_range %}
+          <tr>
+            <td>{{ c.member.member_code }}</td>
+            <td>{{ c.period_month|date:"F Y" }}</td>
+            <td class="text-end">{{ c.amount|ugx }}</td>
+            <td class="text-end"><a href="{% url 'contributions:detail' c.pk %}">Review</a></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endif %}
+
+{% if cycle.status != "UPCOMING" %}
+  <div class="card fcu-card mt-4">
+    <div class="card-header">Members eligible in this cycle ({{ cycle.eligible_member_count }})</div>
+    <div class="card-body p-0">
+      <table class="table table-sm mb-0">
+        <thead><tr><th>Member</th><th>From</th><th>Until</th></tr></thead>
+        <tbody>
+        {% for m in memberships %}
+          <tr>
+            <td>{{ m.member.member_code }} &middot; {{ m.member.full_name }}</td>
+            <td>{{ m.joined_on|date:"d M Y" }}</td>
+            <td>{% if m.left_on %}{{ m.left_on|date:"d M Y" }} (withdrew){% else %}&mdash;{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endif %}
 
 {% if not deletable and cycle.status == "UPCOMING" %}
   <p class="text-muted small mt-3">Cannot delete: {{ delete_blocker }}</p>

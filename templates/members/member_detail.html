@@ -32,6 +32,25 @@
 
                     </h5>
 
+                    {% if cycles %}
+                    <form method="get" class="mt-3 d-flex align-items-center gap-2">
+
+                        <label for="cycle" class="small text-muted mb-0">Cycle</label>
+
+                        <select id="cycle" name="cycle" class="form-select form-select-sm w-auto"
+                                onchange="this.form.submit()">
+                            {% for c in cycles %}
+                                <option value="{{ c.pk }}" {% if c.pk == current_cycle.pk %}selected{% endif %}>
+                                    Cycle {{ c.cycle_number }} &middot; {{ c.name }} ({{ c.get_status_display }})
+                                </option>
+                            {% endfor %}
+                        </select>
+
+                        <noscript><button class="btn btn-sm btn-outline-secondary">Show</button></noscript>
+
+                    </form>
+                    {% endif %}
+
                     <div class="mt-3">
 
                         {% if member.status == "ACTIVE" %}
@@ -70,20 +89,30 @@
 
                 <div class="col-lg-4 text-lg-end">
 
+                    {% if user.has_financial_write_access %}
                     <a href="{% url 'contributions:create' %}"
                        class="btn btn-primary">
 
                         Record Contribution
 
                     </a>
+                    {% endif %}
 
-                    <button
-                        class="btn btn-outline-secondary"
-                        disabled>
+                    {% if current_cycle %}
+                    <a href="{% url 'members:statement' member.member_code %}?cycle={{ current_cycle.pk }}"
+                       class="btn btn-outline-secondary">
 
-                        Download Statement
+                        View Statement
 
-                    </button>
+                    </a>
+
+                    <a href="{% url 'members:statement_pdf' member.member_code %}?cycle={{ current_cycle.pk }}"
+                       class="btn btn-outline-secondary">
+
+                        Download PDF
+
+                    </a>
+                    {% endif %}
 
                 </div>
 
@@ -116,7 +145,7 @@
 
                     <h3 class="mt-2">
 
-                        UGX {{ summary.contributions.overall_due }}
+                        {{ summary.contributions.overall_due|ugx }}
 
                     </h3>
 
@@ -140,7 +169,7 @@
 
                     <h3 class="mt-2 text-success">
 
-                        UGX {{ summary.contributions.overall_paid }}
+                        {{ summary.contributions.overall_paid|ugx }}
 
                     </h3>
 
@@ -164,7 +193,7 @@
 
                     <h3 class="mt-2 text-danger">
 
-                        UGX {{ summary.contributions.overall_balance }}
+                        {{ summary.contributions.overall_balance|ugx }}
 
                     </h3>
 
@@ -182,15 +211,17 @@
 
                     <small class="text-muted">
 
-                        Total Deposits
+                        Available Savings
 
                     </small>
 
                     <h3 class="mt-2 text-primary">
 
-                        UGX {{ summary.total_deposits }}
+                        {{ available_savings|ugx }}
 
                     </h3>
+
+                    <small class="text-muted">All cycles, emergency excluded</small>
 
                 </div>
 
@@ -384,19 +415,19 @@
 
                                 <td class="text-end">
 
-                                    UGX {{ summary.contributions.monthly_due }}
+                                    {{ summary.contributions.monthly_due|ugx }}
 
                                 </td>
 
                                 <td class="text-end text-success">
 
-                                    UGX {{ summary.contributions.monthly_paid }}
+                                    {{ summary.contributions.monthly_paid|ugx }}
 
                                 </td>
 
                                 <td class="text-end">
 
-                                    UGX {{ summary.contributions.monthly_balance }}
+                                    {{ summary.contributions.monthly_balance|ugx }}
 
                                 </td>
 
@@ -412,19 +443,19 @@
 
                                 <td class="text-end">
 
-                                    UGX {{ summary.contributions.emergency_due }}
+                                    {{ summary.contributions.emergency_due|ugx }}
 
                                 </td>
 
                                 <td class="text-end text-success">
 
-                                    UGX {{ summary.contributions.emergency_paid }}
+                                    {{ summary.contributions.emergency_paid|ugx }}
 
                                 </td>
 
                                 <td class="text-end">
 
-                                    UGX {{ summary.contributions.emergency_balance }}
+                                    {{ summary.contributions.emergency_balance|ugx }}
 
                                 </td>
 
@@ -440,19 +471,19 @@
 
                                 <td class="text-end">
 
-                                    UGX {{ summary.contributions.overall_due }}
+                                    {{ summary.contributions.overall_due|ugx }}
 
                                 </td>
 
                                 <td class="text-end text-success">
 
-                                    UGX {{ summary.contributions.overall_paid }}
+                                    {{ summary.contributions.overall_paid|ugx }}
 
                                 </td>
 
                                 <td class="text-end text-danger">
 
-                                    UGX {{ summary.contributions.overall_balance }}
+                                    {{ summary.contributions.overall_balance|ugx }}
 
                                 </td>
 
@@ -492,11 +523,35 @@
 
                         <tr>
 
-                            <th>Total Deposits</th>
+                            <th>Deposits this cycle</th>
 
                             <td class="text-end">
 
-                                UGX {{ summary.total_deposits }}
+                                {{ summary.total_deposits|ugx }}
+
+                            </td>
+
+                        </tr>
+
+                        <tr>
+
+                            <th>Emergency this cycle</th>
+
+                            <td class="text-end">
+
+                                {{ summary.total_emergency|ugx }}
+
+                            </td>
+
+                        </tr>
+
+                        <tr>
+
+                            <th>Available Savings</th>
+
+                            <td class="text-end">
+
+                                {{ available_savings|ugx }}
 
                             </td>
 
@@ -508,7 +563,7 @@
 
                             <td class="text-end">
 
-                                UGX {{ summary.loan.balance }}
+                                {{ summary.loan.balance|ugx }}
 
                             </td>
 
@@ -516,11 +571,23 @@
 
                         <tr>
 
-                            <th>Investments</th>
+                            <th>Share of unit trust (indicative)</th>
 
                             <td class="text-end">
 
-                                UGX {{ summary.investment.unit_trust }}
+                                {{ summary.investment.unit_trust|ugx }}
+
+                            </td>
+
+                        </tr>
+
+                        <tr>
+
+                            <th>Bonuses received</th>
+
+                            <td class="text-end">
+
+                                {{ summary.investment.distributions_paid|ugx }}
 
                             </td>
 
@@ -532,7 +599,7 @@
 
                             <td class="text-end">
 
-                                UGX {{ summary.net_position }}
+                                {{ summary.net_position|ugx }}
 
                             </td>
 
@@ -548,6 +615,7 @@
 
     </div>
 
+    {% endif %}
 
 
     <!-- ===================================================== -->
@@ -576,7 +644,7 @@
 
                     <br>
 
-                    Contributions are currently up to date.
+                    Completed the previous cycle's target.
 
                 </div>
 
@@ -588,8 +656,9 @@
 
                     <br>
 
-                    Outstanding contributions must be cleared before loans
-                    or other services can be approved.
+                    Did not meet the previous cycle's target, so this member is
+                    inactive for the current cycle. Loans and other services
+                    are not available until the member completes a cycle.
 
                 </div>
 
@@ -698,7 +767,17 @@
 
                             <td class="text-end fw-semibold">
 
-                                UGX {{ contribution.amount }}
+                                {% if contribution.reversed_at %}
+                                    <s class="text-muted">{{ contribution.amount|ugx }}</s>
+                                    <span class="badge text-bg-secondary">Reversed</span>
+                                {% else %}
+                                    {{ contribution.amount|ugx }}
+                                {% endif %}
+                                {% if contribution.settles_cycle_id == current_cycle.pk and contribution.cycle_id != current_cycle.pk %}
+                                    <span class="badge text-bg-info">Arrears payment</span>
+                                {% elif contribution.settles_cycle_id and contribution.settles_cycle_id != current_cycle.pk %}
+                                    <span class="badge text-bg-light border">Counts to Cycle {{ contribution.settles_cycle.cycle_number }}</span>
+                                {% endif %}
 
                             </td>
 
@@ -804,7 +883,7 @@
 
                     <h2 class="text-primary">
 
-                        UGX {{ summary.loan.balance }}
+                        {{ summary.loan.balance|ugx }}
 
                     </h2>
 
@@ -839,14 +918,15 @@
 
                     <h2 class="text-success">
 
-                        UGX {{ summary.investment.unit_trust }}
+                        {{ summary.investment.unit_trust|ugx }}
 
                     </h2>
 
                     <p class="text-muted">
 
-                        Unit Trust investments, interest earned and dividends
-                        will appear here.
+                        Your indicative share of FCU's unit trust.
+                        Bonuses received: {{ summary.investment.distributions_paid|ugx }}.
+                        <a href="{% url 'unittrust:portfolio' %}">See all investments</a>.
 
                     </p>
 

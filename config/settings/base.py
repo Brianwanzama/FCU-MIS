@@ -66,13 +66,13 @@ LOCAL_APPS = [
     "apps.contributions",
 
     # Future modules (not yet implemented)
-    # "apps.loans",
+    "apps.loans",
     # "apps.repayments",
-    # "apps.unittrust",
+    "apps.unittrust",
     # "apps.emergencyfund",
     # "apps.expenses",
     # "apps.orgsettings",
-    # "apps.reports",
+    "apps.reports",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -111,6 +111,8 @@ TEMPLATES = [
         "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
+            # `ugx` is available in every template without {% load %}.
+            "builtins": ["apps.core.templatetags.currency"],
             "context_processors": [
                 "django.template.context_processors.debug",
                 "django.template.context_processors.request",
@@ -183,17 +185,15 @@ STATICFILES_DIRS = [
 
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-STATICFILES_STORAGE = (
-    "whitenoise.storage.CompressedManifestStaticFilesStorage"
-)
-
 # ---------------------------------------------------------------------
 # Media
 # ---------------------------------------------------------------------
 
 MEDIA_URL = "/media/"
 
-MEDIA_ROOT = BASE_DIR / "media"
+# On Railway, point this at a persistent volume, or uploaded document templates are
+# lost on every deploy.
+MEDIA_ROOT = env.str("FCU_MEDIA_ROOT", default="") or str(BASE_DIR / "media")
 
 # ---------------------------------------------------------------------
 # Default PK
@@ -220,17 +220,30 @@ FCU_DEFAULT_LOAN_INTEREST_PERCENT = env.float(
     default=5.0,
 )
 
-FCU_DEFAULT_MAX_LOAN_AMOUNT = env.int(
-    "FCU_DEFAULT_MAX_LOAN_AMOUNT",
-    default=2000000,
-)
+# A member may borrow up to this percentage of accumulated deposits. FCU has decided
+# on 100% (a loan can never exceed previous contributions). Manual v3.0 4.4 and the
+# official form still say 120%: amend them to match, or set this to 120.
+FCU_LOAN_LIMIT_PERCENT = env.float("FCU_LOAN_LIMIT_PERCENT", default=100.0)
 
-FCU_DEFAULT_MAX_LOAN_PERCENT_OF_CONTRIBUTIONS = env.float(
-    "FCU_DEFAULT_MAX_LOAN_PERCENT_OF_CONTRIBUTIONS",
-    default=75.0,
-)
-
+# Manual 4.5(b): maximum repayment period.
 FCU_MAX_LOAN_REPAYMENT_MONTHS = 3
+
+# Uploaded forms (signed declarations, loan applications) are private: they live
+# outside MEDIA_ROOT, are never served as static files, and are only handed out by
+# views that check who is asking. On Railway point this at a persistent volume.
+PRIVATE_MEDIA_ROOT = env.str("FCU_PRIVATE_MEDIA_ROOT", default="") or str(BASE_DIR / "private_media")
+
+FCU_UPLOAD_MAX_MB = env.int("FCU_UPLOAD_MAX_MB", default=5)
+
+# Automatic recovery of defaulted loans from a member's savings (Manual 4.6) runs
+# only when this is switched on, i.e. once FCU confirms the recovery policy. Until
+# then the nightly job only reports what it WOULD recover. Record the authority
+# (e.g. the General Meeting resolution) in the reference, which is written to the
+# audit log with every recovery.
+FCU_LOAN_AUTO_RECOVERY_ENABLED = env.bool("FCU_LOAN_AUTO_RECOVERY_ENABLED", default=False)
+FCU_LOAN_RECOVERY_POLICY_REF = env.str(
+    "FCU_LOAN_RECOVERY_POLICY_REF", default="FCU Manual v3.0, section 4.6"
+)
 
 # ---------------------------------------------------------------------
 # Email

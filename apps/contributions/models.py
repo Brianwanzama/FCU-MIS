@@ -13,7 +13,7 @@ The distinction that makes this work is between two dates:
     period_month   WHICH month the money settles.
 
 They are routinely different, and the difference is not an edge case — Manual §3.2
-gives a Payment Window that runs to the 5th of the FOLLOWING month, so a June
+gives a Payment Window that runs to the 10th of the FOLLOWING month, so a June
 contribution paid on 4 July is on time. Without period_month there is no way to
 tell that payment apart from an early July one, which would make the late-payment
 penalty (§3.3), the months-contributed counts, and the Inactive trigger (§2.1(b))
@@ -23,7 +23,7 @@ Manual references:
     §1.1     "Contribution" includes BOTH the monthly savings and the Emergency Fund
              payment — hence ContributionType, and hence they are counted separately.
     §3.1     UGX 100,000 savings + UGX 5,000 Emergency Fund, per member, per month.
-    §3.2     The Payment Window: 1st of the month to the 5th of the month following.
+    §3.2     The Payment Window: 1st of the month to the 10th of the month following.
     §6.1     Emergency Fund contributions are ring-fenced to the Emergency Fund.
     §10.1    The Treasurer maintains detailed records of Contributions.
 """
@@ -100,6 +100,20 @@ class Contribution(models.Model):
         help_text="The Financial Cycle this contribution counts toward.",
     )
 
+    settles_cycle = models.ForeignKey(
+        "cycles.Cycle",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="arrears_payments",
+        help_text=(
+            "Only for paying off arrears of a CLOSED cycle. The payment is "
+            "recorded in the active cycle (closed cycles stay locked) but counts "
+            "towards the closed cycle's deposit target. Leave blank for an "
+            "ordinary payment."
+        ),
+    )
+
     contribution_type = models.CharField(
         max_length=20,
         choices=ContributionType.choices,
@@ -125,7 +139,7 @@ class Contribution(models.Model):
         help_text=(
             "WHICH month this payment settles, normalised to the 1st of that month. "
             "Distinct from payment_date: Manual §3.2 lets a month be paid up to the "
-            "5th of the following month, so a June contribution may legitimately "
+            "10th of the following month, so a June contribution may legitimately "
             "carry a July payment_date."
         ),
     )
@@ -161,6 +175,17 @@ class Contribution(models.Model):
         help_text="The Treasurer or Administrator who entered this row (Manual §10.1).",
     )
 
+    reversed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        editable=False,
+        help_text=(
+            "Set when an approved reversal cancels this payment. The row is "
+            "never deleted: it stays in the register and the audit history, but "
+            "no longer counts towards any balance."
+        ),
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -193,6 +218,16 @@ class Contribution(models.Model):
             f"{self.get_contribution_type_display()} - "
             f"UGX {self.amount:,.0f}"
         )
+    @property
+    def is_reversed(self) -> bool:
+        return self.reversed_at is not None
+
+    @property
+    def pending_reversal(self):
+        return self.reversals.filter(
+            status=ContributionReversal.Status.PENDING
+        ).first()
+
     @property
     def is_monthly(self) -> bool:
         """
@@ -256,13 +291,37 @@ class Contribution(models.Model):
                     },
                 )
 
-        # A contribution must settle a month that the cycle actually covers,
-        # otherwise it would inflate that cycle's totals with money belonging to
-        # a different period.
-        if self.period_month is not None and self.cycle_id:
+        if self.settles_cycle_id:
+            from apps.cycles.models import Cycle
+
+            if self.settles_cycle.status != Cycle.Status.CLOSED:
+                errors["settles_cycle"] = ValidationError(
+                    "Only a CLOSED cycle can have arrears settled. Record ordinary "
+                    "payments against the active cycle.",
+                    code="settles_cycle_not_closed",
+                )
+            elif self.settles_cycle_id == self.cycle_id:
+                errors["settles_cycle"] = ValidationError(
+                    "A payment cannot settle arrears of the cycle it is recorded in.",
+                    code="settles_own_cycle",
+                )
+            if self.contribution_type != self.ContributionType.MONTHLY:
+                errors["contribution_type"] = ValidationError(
+                    "Only deposits (monthly contributions) count towards a cycle "
+                    "target, so only deposits can settle arrears.",
+                    code="arrears_must_be_deposit",
+                )
+
+        # A contribution must settle a month that its target cycle actually
+        # covers (the settled cycle for an arrears payment), otherwise it would
+        # inflate that cycle's totals with money belonging to a different period.
+        target_cycle = self.settles_cycle if self.settles_cycle_id else (
+            self.cycle if self.cycle_id else None
+        )
+        if self.period_month is not None and target_cycle is not None:
             covered = self.period_month.replace(day=1)
-            cycle_start = self.cycle.start_date.replace(day=1)
-            cycle_end = self.cycle.end_date.replace(day=1)
+            cycle_start = target_cycle.start_date.replace(day=1)
+            cycle_end = target_cycle.end_date.replace(day=1)
 
             if not (cycle_start <= covered <= cycle_end):
                 errors["period_month"] = ValidationError(
@@ -271,11 +330,68 @@ class Contribution(models.Model):
                     code="period_outside_cycle",
                     params={
                         "month": covered.strftime("%B %Y"),
-                        "cycle": str(self.cycle),
-                        "start": self.cycle.start_date.strftime("%B %Y"),
-                        "end": self.cycle.end_date.strftime("%B %Y"),
+                        "cycle": str(target_cycle),
+                        "start": target_cycle.start_date.strftime("%B %Y"),
+                        "end": target_cycle.end_date.strftime("%B %Y"),
                     },
                 )
 
         if errors:
             raise ValidationError(errors)
+
+
+
+class ContributionReversal(models.Model):
+    """
+    A request to reverse (cancel) a contribution.
+
+    Financial records are never deleted. A reversal is requested with a reason,
+    then approved or rejected by the Administrator or Chairperson (never by the
+    person who asked). Only an approved reversal takes the payment out of the
+    balances, and every step is written to the audit log.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending approval"
+        APPROVED = "APPROVED", "Approved"
+        REJECTED = "REJECTED", "Rejected"
+
+    contribution = models.ForeignKey(
+        Contribution,
+        on_delete=models.PROTECT,
+        related_name="reversals",
+    )
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    reason = models.TextField(help_text="Why this payment should be reversed.")
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="contribution_reversals_requested",
+    )
+    requested_at = models.DateTimeField(auto_now_add=True)
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="contribution_reversals_decided",
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decision_note = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-requested_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["contribution"],
+                condition=models.Q(status="PENDING"),
+                name="one_pending_reversal_per_contribution",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"Reversal of {self.contribution} ({self.get_status_display()})"

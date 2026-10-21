@@ -18,12 +18,25 @@ Contribution Register
         </p>
     </div>
 
-    <a href="{% url 'contributions:create' %}"
-       class="btn btn-fcu-gold">
+    <div class="d-flex gap-2">
 
-        + Record Contribution
+        <a href="{% url 'contributions:reversals' %}"
+           class="btn btn-outline-secondary">
 
-    </a>
+            Reversal requests
+
+        </a>
+
+        {% if user.has_financial_write_access %}
+        <a href="{% url 'contributions:create' %}"
+           class="btn btn-fcu-gold">
+
+            + Record Contribution
+
+        </a>
+        {% endif %}
+
+    </div>
 
 </div>
 
@@ -39,12 +52,12 @@ Contribution Register
             <div class="card-body">
 
                 <small class="text-muted text-uppercase">
-                    Expected
+                    Deposits expected
                 </small>
 
                 <h3 class="mt-2 mb-0">
 
-                    UGX {{ summary.expected }}
+                    {{ summary.expected|ugx }}
 
                 </h3>
 
@@ -61,12 +74,12 @@ Contribution Register
             <div class="card-body">
 
                 <small class="text-muted text-uppercase">
-                    Collected
+                    Deposits collected
                 </small>
 
                 <h3 class="mt-2 mb-0">
 
-                    UGX {{ summary.collected }}
+                    {{ summary.collected|ugx }}
 
                 </h3>
 
@@ -83,12 +96,12 @@ Contribution Register
             <div class="card-body">
 
                 <small class="text-muted text-uppercase">
-                    Outstanding
+                    Deposits outstanding
                 </small>
 
                 <h3 class="mt-2 mb-0">
 
-                    UGX {{ summary.outstanding }}
+                    {{ summary.outstanding|ugx }}
 
                 </h3>
 
@@ -105,14 +118,13 @@ Contribution Register
             <div class="card-body">
 
                 <small class="text-muted text-uppercase">
-                    Collection Rate
+                    Deposit collection rate
                 </small>
 
                 <h3 class="mt-2 mb-0">
 
                     {% if summary.expected %}
-                        {{ summary.collected|floatformat:0 }} /
-                        {{ summary.expected|floatformat:0 }}
+                        {{ summary.collection_rate }}%
                     {% else %}
                         0%
                     {% endif %}
@@ -338,7 +350,7 @@ Contribution Register
 
                         <td class="text-end">
 
-                            UGX {{ contribution.amount }}
+                            {{ contribution.amount|ugx }}
 
                         </td>
 
@@ -356,29 +368,45 @@ Contribution Register
 
                         <td class="text-center">
 
+                            {% if contribution.reversed_at %}
+                                <span class="badge text-bg-secondary">Reversed</span>
+                            {% endif %}
+
                             <a
-                                href="#"
+                                href="{% url 'contributions:detail' contribution.pk %}"
                                 class="btn btn-sm btn-outline-primary">
 
                                 View
 
                             </a>
 
-                            <a
-                                href="#"
-                                class="btn btn-sm btn-outline-warning">
+                            {% if not contribution.reversed_at and not contribution.cycle.is_locked %}
 
-                                Edit
+                                {% if contribution.has_pending_reversal %}
+                                    <span class="badge text-bg-warning">Reversal pending</span>
+                                {% else %}
+                                    {% if user.can_edit_contributions %}
+                                    <a
+                                        href="{% url 'contributions:edit' contribution.pk %}"
+                                        class="btn btn-sm btn-outline-warning">
 
-                            </a>
+                                        Edit
 
-                            <a
-                                href="#"
-                                class="btn btn-sm btn-outline-danger">
+                                    </a>
+                                    {% endif %}
 
-                                Delete
+                                    {% if user.can_request_reversal %}
+                                    <a
+                                        href="{% url 'contributions:reverse' contribution.pk %}"
+                                        class="btn btn-sm btn-outline-danger">
 
-                            </a>
+                                        Reverse
+
+                                    </a>
+                                    {% endif %}
+                                {% endif %}
+
+                            {% endif %}
 
                         </td>
 

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Profit distributions{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb small">
+  <li class="breadcrumb-item"><a href="{% url 'unittrust:portfolio' %}">Investments</a></li>
+  <li class="breadcrumb-item active">Profit distributions</li></ol></nav>
+<h1 class="mb-3">Profit distributions</h1>
+<p class="text-muted">Profit is mainly reinvested. When FCU decides to share some, it goes to Active members in Good Standing in proportion to their contributions (Manual 8).</p>
+
+<div class="row g-4">
+  <div class="col-lg-8"><div class="card fcu-card"><div class="table-responsive"><table class="table align-middle mb-0">
+    <thead><tr><th>Drafted</th><th>Description</th><th class="text-end">Total</th><th>Status</th></tr></thead><tbody>
+    {% for d in distributions %}
+      <tr><td class="small">{{ d.created_at|date:"d M Y" }}<br>{{ d.created_by }}</td>
+        <td><a href="{% url 'unittrust:distribution' d.pk %}">{{ d.description }}</a><div class="small text-muted">{{ d.cycle }}</div></td>
+        <td class="text-end">{{ d.total_amount|ugx }}</td>
+        <td>{% if d.status == "PAID" %}<span class="badge text-bg-success">Paid</span>{% elif d.status == "APPROVED" %}<span class="badge text-bg-primary">Approved</span>{% elif d.status == "CANCELLED" %}<span class="badge text-bg-secondary">Cancelled</span>{% else %}<span class="badge text-bg-warning">Draft</span>{% endif %}</td></tr>
+    {% empty %}<tr><td colspan="4" class="text-center text-muted py-5">Nothing has been distributed.</td></tr>{% endfor %}
+  </tbody></table></div></div></div>
+  {% if can_draft %}
+  <div class="col-lg-4"><div class="card fcu-card"><div class="card-header">Draft a distribution</div><div class="card-body">
+    <form method="post">{% csrf_token %}
+      {% for field in form %}<div class="mb-2"><label class="form-label small mb-1" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}</div>{% endfor %}
+      <button class="btn btn-fcu-primary" type="submit">Work out the shares</button>
+    </form></div></div></div>
+  {% endif %}
+</div>
+{% endblock %}
