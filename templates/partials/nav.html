@@ -43,6 +43,17 @@
                     </a>
                 </li>
 
+                {% if user.member_id %}
+
+                <li class="nav-item">
+                    <a class="nav-link"
+                       href="{% url 'members:mine' %}">
+                        My Finances
+                    </a>
+                </li>
+
+                {% endif %}
+
                 {% if user.has_financial_write_access %}
 
                 <li class="nav-item">

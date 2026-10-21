@@ -13,12 +13,14 @@
         </p>
     </div>
 
+    {% if user.has_full_access %}
     <a href="{% url 'admin:members_member_add' %}"
        class="btn btn-primary">
 
         + New Member
 
     </a>
+    {% endif %}
 
 </div>
 
@@ -86,12 +88,14 @@
 
                     <td class="text-end">
 
+                        {% if user.has_financial_view_access or user.member_id == member.pk %}
                         <a href="{% url 'members:detail' member.member_code %}"
                            class="btn btn-sm btn-outline-primary">
 
                             View
 
                         </a>
+                        {% endif %}
 
                     </td>
 

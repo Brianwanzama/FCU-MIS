@@ -122,6 +122,23 @@ is recommended before Phase 2 — flag if you'd like that added now rather than 
   Outstanding loans will be added when the Loans module exists.
 - Run `python manage.py migrate` after pulling: adds migrations `cycles.0002` and `0003`.
 
+## Member financial history and statements
+
+- `/members/<code>/` is the member's financial dashboard with a **cycle selector**
+  (every cycle that has begun). It shows deposits and emergency (target, paid,
+  outstanding), available savings, loan balance and the payment ledger for the
+  selected cycle. `/members/me/` ("My Finances" in the menu) opens a signed-in
+  member's own page.
+- **Access:** a member can open only their own pages (403 otherwise). The
+  Administrator, Treasurer and Chairperson can open anyone's. The Secretary can see
+  the member register but not other members' finances.
+- **Statements:** `/members/<code>/statement/?cycle=<id>` (printable) and
+  `/members/<code>/statement.pdf?cycle=<id>` (PDF). The ledger shows a running
+  deposits total; reversed payments and payments that count towards another cycle
+  are shown in grey and are not counted.
+- **Available savings** = deposits paid across all cycles, reversed payments and
+  emergency contributions excluded. Loan balances will be deducted once Loans exist.
+
 ## Next phase
 
 The SRS was revised to v1.1 (General Ledger, Financial Position, Cycle Locking,

@@ -276,3 +276,121 @@ def member_investment_summary(member):
     return {
         "unit_trust": Decimal("0"),
     }
+
+# ============================================================
+# MEMBER STATEMENT
+# ============================================================
+
+def member_available_savings(member):
+    """
+    Deposits the member has paid across ALL cycles (reversed payments excluded).
+
+    Emergency contributions are not included: they are ring-fenced and never
+    available for loan recovery. Loan balances will be deducted here once the
+    Loans module exists.
+    """
+
+    from django.db.models import Sum
+
+    from apps.contributions.models import Contribution
+
+    return (
+        Contribution.objects.filter(
+            member=member,
+            contribution_type=Contribution.ContributionType.MONTHLY,
+            reversed_at__isnull=True,
+        ).aggregate(total=Sum("amount"))["total"]
+        or Decimal("0")
+    )
+
+
+def statement_cycles(member=None):
+    """Cycles a statement can be produced for: every cycle that has begun."""
+
+    from apps.cycles.models import Cycle
+
+    return Cycle.objects.exclude(status=Cycle.Status.UPCOMING).order_by("-start_date")
+
+
+def member_statement(member, cycle):
+    """
+    Everything a statement (page or PDF) needs, for one member and one cycle.
+
+    The ledger lists every payment that belongs to the cycle in date order with
+    running deposit and emergency totals. Reversed payments stay visible but are
+    marked and never counted. A payment recorded in this cycle that settles an
+    OLDER cycle's arrears is listed too, but does not count here; a later payment
+    that settles THIS cycle's arrears does.
+    """
+
+    from django.db.models import Q
+    from django.utils import timezone
+
+    from apps.contributions.models import Contribution
+
+    summary = member_financial_summary(member, cycle)
+    contributions = summary["contributions"]
+
+    payments = (
+        Contribution.objects.filter(Q(cycle=cycle) | Q(settles_cycle=cycle), member=member)
+        .select_related("cycle", "settles_cycle")
+        .order_by("payment_date", "id")
+    )
+
+    rows = []
+    running_deposits = Decimal("0")
+    running_emergency = Decimal("0")
+
+    for p in payments:
+        counts_here = (
+            p.reversed_at is None
+            and (p.settles_cycle_id is None or p.settles_cycle_id == cycle.pk)
+        )
+        is_deposit = p.contribution_type == Contribution.ContributionType.MONTHLY
+
+        notes = []
+        if p.reversed_at is not None:
+            notes.append("Reversed")
+        if p.settles_cycle_id and p.settles_cycle_id != cycle.pk:
+            notes.append(f"Counted towards Cycle {p.settles_cycle.cycle_number} arrears")
+        elif p.settles_cycle_id == cycle.pk and p.cycle_id != cycle.pk:
+            notes.append(f"Arrears payment made in Cycle {p.cycle.cycle_number}")
+
+        if counts_here:
+            if is_deposit:
+                running_deposits += p.amount
+            else:
+                running_emergency += p.amount
+
+        rows.append(
+            {
+                "contribution": p,
+                "date": p.payment_date,
+                "description": f"{p.get_contribution_type_display()} for {p.period_month:%b %Y}",
+                "method": p.get_payment_method_display(),
+                "reference": p.reference,
+                "amount": p.amount,
+                "is_deposit": is_deposit,
+                "counts_here": counts_here,
+                "reversed": p.reversed_at is not None,
+                "note": "; ".join(notes),
+                "running_deposits": running_deposits,
+                "running_emergency": running_emergency,
+            }
+        )
+
+    return {
+        "member": member,
+        "cycle": cycle,
+        "generated_at": timezone.localtime(),
+        "deposit_target": contributions["monthly_due"],
+        "deposits_paid": contributions["monthly_paid"],
+        "deposits_outstanding": max(contributions["monthly_balance"], Decimal("0")),
+        "emergency_target": contributions["emergency_due"],
+        "emergency_paid": contributions["emergency_paid"],
+        "emergency_outstanding": max(contributions["emergency_balance"], Decimal("0")),
+        "loan_outstanding": summary["loan"]["balance"],
+        "available_savings": member_available_savings(member),
+        "target_met": contributions["monthly_balance"] <= 0,
+        "rows": rows,
+    }

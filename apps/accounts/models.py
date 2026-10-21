@@ -117,6 +117,16 @@ class User(AbstractUser):
             self.Role.CHAIRPERSON,
         )
 
+    def can_view_member_finances(self, member):
+        """
+        A member sees only their own financial records. The Administrator,
+        Treasurer and Chairperson can see everyone's.
+        """
+        if self.has_financial_view_access:
+            return True
+
+        return self.member_id is not None and self.member_id == member.pk
+
     @property
     def can_edit_contributions(self):
         """Correct an existing contribution (reason required, fully audited)."""
