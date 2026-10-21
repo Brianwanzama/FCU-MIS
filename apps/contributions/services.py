@@ -17,7 +17,7 @@ from decimal import Decimal
 from apps.cycles.services import get_active_cycle
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Q, Sum
 
 from apps.auditlog.models import AuditLog
 from apps.auditlog.utils import log_action
@@ -44,6 +44,7 @@ def record_contribution(contribution, actor=None):
 
     _validate_active_cycle(contribution)
     contribution.full_clean()
+    _validate_arrears_amount(contribution)
     contribution.save()
 
     log_action(
@@ -52,6 +53,8 @@ def record_contribution(contribution, actor=None):
         actor=actor,
         new_value=_snapshot(contribution),
     )
+
+    _reassess_arrears(contribution.member, contribution.settles_cycle, actor)
 
     return contribution
 
@@ -72,6 +75,7 @@ def update_contribution(contribution, old_snapshot, actor=None):
         )
 
     contribution.full_clean()
+    _validate_arrears_amount(contribution)
     contribution.save()
 
     log_action(
@@ -81,6 +85,17 @@ def update_contribution(contribution, old_snapshot, actor=None):
         old_value=old_snapshot,
         new_value=_snapshot(contribution),
     )
+
+    _reassess_arrears(contribution.member, contribution.settles_cycle, actor)
+
+    old_settled_id = (old_snapshot or {}).get("settles_cycle_id")
+
+    if old_settled_id and old_settled_id != contribution.settles_cycle_id:
+        from apps.cycles.models import Cycle
+
+        _reassess_arrears(
+            contribution.member, Cycle.objects.filter(pk=old_settled_id).first(), actor
+        )
 
     return contribution
 
@@ -103,6 +118,9 @@ def delete_contribution(contribution, actor=None):
     snapshot = _snapshot(contribution)
     repr_ = str(contribution)
     pk = contribution.pk
+    member = contribution.member
+    settled_cycle = contribution.settles_cycle
+
     contribution.delete()
 
     log_action(
@@ -114,6 +132,8 @@ def delete_contribution(contribution, actor=None):
         old_value=snapshot,
         new_value={"event": "CONTRIBUTION_DELETED"},
     )
+
+    _reassess_arrears(member, settled_cycle, actor)
 
     return repr_
 
@@ -128,18 +148,18 @@ def member_contribution_summary(member, cycle):
     """
 
     monthly_paid = (
-        Contribution.objects.filter(
+        cycle_payments(cycle)
+        .filter(
             member=member,
-            cycle=cycle,
             contribution_type=Contribution.ContributionType.MONTHLY,
         ).aggregate(total=Sum("amount"))["total"]
         or Decimal("0")
     )
 
     emergency_paid = (
-        Contribution.objects.filter(
+        cycle_payments(cycle)
+        .filter(
             member=member,
-            cycle=cycle,
             contribution_type=Contribution.ContributionType.EMERGENCY,
         ).aggregate(total=Sum("amount"))["total"]
         or Decimal("0")
@@ -197,12 +217,10 @@ def member_balance(member, cycle):
         "overall_paid": summary["overall_paid"],
         "overall_balance": summary["overall_balance"],
 
-        # Each obligation must be cleared on its own: an emergency
-        # overpayment never covers a deposit shortfall, or vice versa.
-        "eligible": (
-            summary["monthly_balance"] <= Decimal("0")
-            and summary["emergency_balance"] <= Decimal("0")
-        ),
+        # The cycle target is the DEPOSIT target. Emergency contributions are a
+        # separate obligation and do not decide membership status, and an
+        # emergency overpayment can never cover a deposit shortfall.
+        "eligible": summary["monthly_balance"] <= Decimal("0"),
     }
 # ============================================================
 # CYCLE SUMMARY
@@ -240,6 +258,7 @@ def cycle_contribution_summary(cycle):
         return (
             Contribution.objects.filter(
                 cycle=cycle,
+                settles_cycle__isnull=True,
                 contribution_type=contribution_type,
             ).aggregate(total=Sum("amount"))["total"]
             or Decimal("0")
@@ -276,6 +295,65 @@ def cycle_contribution_summary(cycle):
 # HELPERS
 # ============================================================
 
+def cycle_payments(cycle):
+    """
+    Every payment that counts towards `cycle`: those recorded in it, except
+    arrears payments it made for an older cycle, plus later arrears payments
+    recorded elsewhere that settle it.
+    """
+
+    return Contribution.objects.filter(
+        Q(cycle=cycle, settles_cycle__isnull=True)
+        | Q(settles_cycle=cycle)
+    )
+
+
+def _validate_arrears_amount(contribution):
+    """
+    An arrears payment may not exceed what the member still owes for the closed
+    cycle; anything beyond that belongs in the active cycle.
+    """
+
+    settled = contribution.settles_cycle
+
+    if settled is None:
+        return
+
+    balance = member_contribution_summary(contribution.member, settled)["monthly_balance"]
+
+    if contribution.pk:
+        previous = Contribution.objects.filter(pk=contribution.pk).values_list(
+            "amount", "settles_cycle_id"
+        ).first()
+        if previous and previous[1] == settled.pk:
+            balance += previous[0]
+
+    if balance <= 0:
+        raise ContributionError(
+            f"{contribution.member.member_code} has no deposit arrears for {settled}."
+        )
+
+    if contribution.amount > balance:
+        raise ContributionError(
+            f"{contribution.member.member_code} owes only UGX {balance:,.0f} for "
+            f"{settled}. Record any extra amount as an ordinary payment."
+        )
+
+
+def _reassess_arrears(member, settled_cycle, actor):
+    """
+    After an arrears payment is added, changed or removed, update the member's
+    status automatically.
+    """
+
+    if settled_cycle is None:
+        return
+
+    from apps.members.services import reassess_after_arrears_payment
+
+    reassess_after_arrears_payment(member, settled_cycle, actor=actor)
+
+
 def _validate_active_cycle(contribution):
     """
     Contributions may only be recorded against the ACTIVE cycle.
@@ -304,6 +382,10 @@ def _snapshot(contribution):
         "member": contribution.member.member_code,
         "cycle": str(contribution.cycle),
         "contribution_type": contribution.contribution_type,
+        "settles_cycle": (
+            str(contribution.settles_cycle) if contribution.settles_cycle_id else None
+        ),
+        "settles_cycle_id": contribution.settles_cycle_id,
         "amount": str(contribution.amount),
         "period_month": (
             contribution.period_month.isoformat()

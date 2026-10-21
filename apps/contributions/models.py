@@ -100,6 +100,20 @@ class Contribution(models.Model):
         help_text="The Financial Cycle this contribution counts toward.",
     )
 
+    settles_cycle = models.ForeignKey(
+        "cycles.Cycle",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="arrears_payments",
+        help_text=(
+            "Only for paying off arrears of a CLOSED cycle. The payment is "
+            "recorded in the active cycle (closed cycles stay locked) but counts "
+            "towards the closed cycle's deposit target. Leave blank for an "
+            "ordinary payment."
+        ),
+    )
+
     contribution_type = models.CharField(
         max_length=20,
         choices=ContributionType.choices,
@@ -256,13 +270,37 @@ class Contribution(models.Model):
                     },
                 )
 
-        # A contribution must settle a month that the cycle actually covers,
-        # otherwise it would inflate that cycle's totals with money belonging to
-        # a different period.
-        if self.period_month is not None and self.cycle_id:
+        if self.settles_cycle_id:
+            from apps.cycles.models import Cycle
+
+            if self.settles_cycle.status != Cycle.Status.CLOSED:
+                errors["settles_cycle"] = ValidationError(
+                    "Only a CLOSED cycle can have arrears settled. Record ordinary "
+                    "payments against the active cycle.",
+                    code="settles_cycle_not_closed",
+                )
+            elif self.settles_cycle_id == self.cycle_id:
+                errors["settles_cycle"] = ValidationError(
+                    "A payment cannot settle arrears of the cycle it is recorded in.",
+                    code="settles_own_cycle",
+                )
+            if self.contribution_type != self.ContributionType.MONTHLY:
+                errors["contribution_type"] = ValidationError(
+                    "Only deposits (monthly contributions) count towards a cycle "
+                    "target, so only deposits can settle arrears.",
+                    code="arrears_must_be_deposit",
+                )
+
+        # A contribution must settle a month that its target cycle actually
+        # covers (the settled cycle for an arrears payment), otherwise it would
+        # inflate that cycle's totals with money belonging to a different period.
+        target_cycle = self.settles_cycle if self.settles_cycle_id else (
+            self.cycle if self.cycle_id else None
+        )
+        if self.period_month is not None and target_cycle is not None:
             covered = self.period_month.replace(day=1)
-            cycle_start = self.cycle.start_date.replace(day=1)
-            cycle_end = self.cycle.end_date.replace(day=1)
+            cycle_start = target_cycle.start_date.replace(day=1)
+            cycle_end = target_cycle.end_date.replace(day=1)
 
             if not (cycle_start <= covered <= cycle_end):
                 errors["period_month"] = ValidationError(
@@ -271,9 +309,9 @@ class Contribution(models.Model):
                     code="period_outside_cycle",
                     params={
                         "month": covered.strftime("%B %Y"),
-                        "cycle": str(self.cycle),
-                        "start": self.cycle.start_date.strftime("%B %Y"),
-                        "end": self.cycle.end_date.strftime("%B %Y"),
+                        "cycle": str(target_cycle),
+                        "start": target_cycle.start_date.strftime("%B %Y"),
+                        "end": target_cycle.end_date.strftime("%B %Y"),
                     },
                 )
 

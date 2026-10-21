@@ -16,6 +16,7 @@ class ContributionForm(forms.ModelForm):
         fields = [
             "member",
             "contribution_type",
+            "settles_cycle",
             "amount",
             "period_month",
             "payment_date",
@@ -31,6 +32,13 @@ class ContributionForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        from apps.cycles.models import Cycle
+
+        self.fields["settles_cycle"].queryset = Cycle.objects.filter(
+            status=Cycle.Status.CLOSED
+        ).order_by("-end_date")
+        self.fields["settles_cycle"].label = "Settles arrears of cycle"
 
         for field in self.fields.values():
             widget = field.widget

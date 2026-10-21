@@ -19,8 +19,8 @@ from apps.auditlog.utils import log_action
 
 def members_failing_cycle_target(cycle):
     """
-    Members who have not met the cycle's target: deposits AND emergency
-    obligation both cleared. Withdrawn members are not assessed.
+    Members who have not met the cycle's deposit target (emergency contributions
+    are not part of it). Withdrawn members are not assessed.
 
     A member who joined mid-cycle owes the full cycle amount.
     """
@@ -37,68 +37,121 @@ def members_failing_cycle_target(cycle):
     return failing
 
 
+def _set_status_from_cycle(member, cycle, actor, event):
+    """
+    Set a member ACTIVE or INACTIVE according to whether they met `cycle`'s
+    deposit target. Never touches a WITHDRAWN member. Returns the new status
+    if it changed, otherwise None.
+    """
+
+    from apps.contributions.services import member_balance
+    from .models import Member
+
+    # The caller's instance may be stale (status changes when cycles close).
+    member.refresh_from_db(fields=["status", "inactive_reason"])
+
+    if member.status == Member.Status.WITHDRAWN:
+        return None
+
+    if member_balance(member, cycle)["eligible"]:
+        new_status = Member.Status.ACTIVE
+        inactive_reason = ""
+    else:
+        new_status = Member.Status.INACTIVE
+        inactive_reason = Member.InactiveReason.CONTRIBUTION_ARREARS
+
+    if (
+        member.status == new_status
+        and member.inactive_reason == inactive_reason
+    ):
+        return None
+
+    old_snapshot = {
+        "status": member.status,
+        "inactive_reason": member.inactive_reason,
+    }
+
+    member.status = new_status
+    member.inactive_reason = inactive_reason
+    member.save(update_fields=["status", "inactive_reason"])
+
+    log_action(
+        AuditLog.Action.STATUS_CHANGE,
+        instance=member,
+        actor=actor,
+        old_value=old_snapshot,
+        new_value={
+            "status": member.status,
+            "inactive_reason": member.inactive_reason,
+            "event": event,
+            "cycle": str(cycle),
+        },
+    )
+
+    return new_status
+
+
 @transaction.atomic
 def apply_cycle_completion_statuses(cycle, actor=None):
     """
     Set every member's status for the NEXT cycle from how this cycle ended.
 
-    FCU rule: a member who fails to meet the cycle's target becomes INACTIVE,
-    and is ACTIVE in the next cycle only if the previous cycle was completed.
-    So status is decided once, when a cycle closes. It is deliberately NOT
-    recalculated on each payment: a half-paid member in the middle of a cycle
-    is still on course, and flipping them to Inactive would also move the
-    unit-wide targets (which count Active members) under everyone's feet.
+    FCU rule: a member who fails to meet the cycle's target (deposits only,
+    emergency contributions are not part of it) becomes INACTIVE, and is ACTIVE
+    in the next cycle only if the previous cycle was completed. So status is
+    decided when a cycle closes. It is deliberately NOT recalculated on each
+    ordinary payment: a half-paid member in the middle of a cycle is still on
+    course, and flipping them to Inactive would also move the unit-wide targets
+    (which count Active members) under everyone's feet.
 
     A WITHDRAWN member is never touched, so a payment can never reactivate them.
 
     Returns {"activated": [...], "deactivated": [...]} of member codes.
     """
 
-    from apps.contributions.services import member_balance
     from .models import Member
 
     changed = {"activated": [], "deactivated": []}
 
     for member in Member.objects.exclude(status=Member.Status.WITHDRAWN):
-        if member_balance(member, cycle)["eligible"]:
-            new_status = Member.Status.ACTIVE
-            inactive_reason = ""
-        else:
-            new_status = Member.Status.INACTIVE
-            inactive_reason = Member.InactiveReason.CONTRIBUTION_ARREARS
-
-        if (
-            member.status == new_status
-            and member.inactive_reason == inactive_reason
-        ):
-            continue
-
-        old_snapshot = {
-            "status": member.status,
-            "inactive_reason": member.inactive_reason,
-        }
-
-        member.status = new_status
-        member.inactive_reason = inactive_reason
-        member.save(update_fields=["status", "inactive_reason"])
-
-        log_action(
-            AuditLog.Action.STATUS_CHANGE,
-            instance=member,
-            actor=actor,
-            old_value=old_snapshot,
-            new_value={
-                "status": member.status,
-                "inactive_reason": member.inactive_reason,
-                "event": "CYCLE_COMPLETION_ASSESSED",
-                "cycle": str(cycle),
-            },
+        new_status = _set_status_from_cycle(
+            member, cycle, actor, "CYCLE_COMPLETION_ASSESSED"
         )
 
-        key = "activated" if new_status == Member.Status.ACTIVE else "deactivated"
-        changed[key].append(member.member_code)
+        if new_status == Member.Status.ACTIVE:
+            changed["activated"].append(member.member_code)
+        elif new_status == Member.Status.INACTIVE:
+            changed["deactivated"].append(member.member_code)
 
     return changed
+
+
+@transaction.atomic
+def reassess_after_arrears_payment(member, settled_cycle, actor=None):
+    """
+    Update a member's status after a payment towards (or a reversal of a
+    payment towards) a CLOSED cycle's arrears.
+
+    Only the most recent closed cycle decides status ("active only if you
+    completed the previous cycle"), so settling an older cycle changes nothing.
+    Clearing the arrears makes the member ACTIVE automatically; reversing that
+    payment puts them back to INACTIVE.
+    """
+
+    from apps.cycles.models import Cycle
+
+    latest_closed = (
+        Cycle.objects.filter(status=Cycle.Status.CLOSED)
+        .order_by("-end_date")
+        .first()
+    )
+
+    if settled_cycle is None or latest_closed is None or settled_cycle != latest_closed:
+        return None
+
+    return _set_status_from_cycle(
+        member, settled_cycle, actor, "ARREARS_PAYMENT_ASSESSED"
+    )
 
 
 # ============================================================

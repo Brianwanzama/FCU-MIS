@@ -83,11 +83,13 @@ class FinancialTargetTests(TestCase):
         self.assertEqual(b["emergency_balance"], Decimal("-100000"))
         self.assertFalse(b["eligible"])
 
-    def test_member_is_eligible_only_when_both_are_cleared(self):
-        self.pay(M.MONTHLY, "600000")
+    def test_target_is_deposits_only_emergency_is_not_part_of_it(self):
+        self.pay(M.MONTHLY, "500000")
         self.assertFalse(services.member_balance(self.member, self.cycle)["eligible"])
-        self.pay(M.EMERGENCY, "30000")
-        self.assertTrue(services.member_balance(self.member, self.cycle)["eligible"])
+        self.pay(M.MONTHLY, "100000")
+        b = services.member_balance(self.member, self.cycle)
+        self.assertTrue(b["eligible"])
+        self.assertEqual(b["emergency_balance"], Decimal("30000"))  # still owed, separately
 
     def test_total_deposits_exclude_emergency(self):
         from apps.members.services import member_financial_summary
@@ -161,7 +163,6 @@ class MemberStatusRuleTests(TestCase):
 
     def test_closing_deactivates_members_who_missed_the_target(self):
         self.pay(self.full, M.MONTHLY, "600000")
-        self.pay(self.full, M.EMERGENCY, "30000")
         self.pay(self.partial, M.MONTHLY, "100000")
 
         cycle_services.close_cycle(self.cycle, actor=self.actor)
@@ -172,10 +173,15 @@ class MemberStatusRuleTests(TestCase):
             self.partial.inactive_reason, Member.InactiveReason.CONTRIBUTION_ARREARS
         )
 
-    def test_missing_only_the_emergency_obligation_still_fails_the_cycle(self):
-        self.pay(self.full, M.MONTHLY, "600000")
+    def test_emergency_contributions_are_not_part_of_the_target(self):
+        self.pay(self.full, M.MONTHLY, "600000")  # no emergency paid at all
         cycle_services.close_cycle(self.cycle, actor=self.actor)
-        self.assertEqual(self.status(self.full), Member.Status.INACTIVE)
+        self.assertEqual(self.status(self.full), Member.Status.ACTIVE)
+
+    def test_emergency_alone_does_not_meet_the_target(self):
+        self.pay(self.partial, M.EMERGENCY, "30000")
+        cycle_services.close_cycle(self.cycle, actor=self.actor)
+        self.assertEqual(self.status(self.partial), Member.Status.INACTIVE)
 
     def test_withdrawn_member_is_never_reactivated(self):
         self.pay(self.withdrawn, M.MONTHLY, "600000")
@@ -196,3 +202,91 @@ class MemberStatusRuleTests(TestCase):
             new_value__event="CYCLE_CLOSED"
         ).latest("pk")
         self.assertIn(self.partial.member_code, entry.new_value["members_deactivated"])
+
+
+class ArrearsSettlementTests(TestCase):
+    """Paying off a closed cycle's arrears updates status automatically."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.actor = User.objects.create_user(
+            username="admin2", password="x", role=User.Role.ADMINISTRATOR
+        )
+        cls.old = cycle_services.create_cycle(
+            Cycle(cycle_number=1, start_date=date(2026, 1, 1), duration_months=6),
+            actor=cls.actor,
+        )
+        cycle_services.activate_cycle(cls.old, actor=cls.actor)
+        cls.member = Member.objects.order_by("member_code").first()
+        cls.withdrawn = Member.objects.order_by("member_code")[1]
+        Member.objects.filter(pk=cls.withdrawn.pk).update(status=Member.Status.WITHDRAWN)
+        cls.record(cls, cls.old, "500000")  # 100,000 short
+        cls.paid_in_full = Member.objects.order_by("member_code")[2]
+        cls.record(cls, cls.old, "600000", member=cls.paid_in_full)
+        cycle_services.close_cycle(cls.old, actor=cls.actor)
+        cls.new = cycle_services.create_cycle(
+            Cycle(cycle_number=2, start_date=date(2026, 7, 1), duration_months=6),
+            actor=cls.actor,
+        )
+        cycle_services.activate_cycle(cls.new, actor=cls.actor)
+
+    def record(self, cycle, amount, settles=None, member=None, month=date(2026, 1, 1)):
+        return services.record_contribution(
+            Contribution(
+                member=member or self.member, cycle=cycle, settles_cycle=settles,
+                contribution_type=M.MONTHLY, amount=Decimal(amount),
+                period_month=month, payment_date=date(2026, 1, 5),
+                payment_method="CASH", recorded_by=self.actor,
+            ),
+            actor=self.actor,
+        )
+
+    def status(self):
+        self.member.refresh_from_db()
+        return self.member.status
+
+    def test_member_who_missed_the_cycle_is_inactive(self):
+        self.assertEqual(self.status(), Member.Status.INACTIVE)
+
+    def test_paying_the_arrears_reactivates_the_member_automatically(self):
+        self.record(self.new, "100000", settles=self.old)
+        self.assertEqual(self.status(), Member.Status.ACTIVE)
+        b = services.member_balance(self.member, self.old)
+        self.assertEqual(b["monthly_balance"], Decimal("0"))
+
+    def test_part_payment_of_arrears_keeps_the_member_inactive(self):
+        self.record(self.new, "60000", settles=self.old)
+        self.assertEqual(self.status(), Member.Status.INACTIVE)
+        self.record(self.new, "40000", settles=self.old)
+        self.assertEqual(self.status(), Member.Status.ACTIVE)
+
+    def test_reversing_the_arrears_payment_makes_the_member_inactive_again(self):
+        c = self.record(self.new, "100000", settles=self.old)
+        services.delete_contribution(c, actor=self.actor)
+        self.assertEqual(self.status(), Member.Status.INACTIVE)
+
+    def test_arrears_payment_does_not_count_towards_the_new_cycle(self):
+        self.record(self.new, "100000", settles=self.old)
+        b = services.member_balance(self.member, self.new)
+        self.assertEqual(b["monthly_paid"], Decimal("0"))
+        self.assertEqual(services.cycle_contribution_summary(self.new)["collected"], Decimal("0"))
+
+    def test_cannot_pay_more_than_the_arrears(self):
+        with self.assertRaises(services.ContributionError):
+            self.record(self.new, "150000", settles=self.old)
+
+    def test_cannot_settle_a_cycle_with_no_arrears(self):
+        other = self.paid_in_full
+        with self.assertRaises(services.ContributionError):
+            self.record(self.new, "1000", settles=self.old, member=other)
+
+    def test_cannot_settle_the_active_cycle(self):
+        with self.assertRaises(Exception):
+            self.record(self.new, "1000", settles=self.new, month=date(2026, 7, 1))
+
+    def test_a_withdrawn_member_is_not_reactivated_by_paying_arrears(self):
+        from apps.members.services import reassess_after_arrears_payment
+
+        reassess_after_arrears_payment(self.withdrawn, self.old, actor=self.actor)
+        self.withdrawn.refresh_from_db()
+        self.assertEqual(self.withdrawn.status, Member.Status.WITHDRAWN)

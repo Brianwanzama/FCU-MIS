@@ -67,9 +67,17 @@ is recommended before Phase 2 — flag if you'd like that added now rather than 
   6-month cycle, reported separately. Unit targets = eligible (Active) members x those.
 - **Mid-cycle joiners** owe the full cycle amount.
 - **Member status** is assessed when a cycle closes: a member who did not meet the
-  cycle's target (deposits and emergency both cleared) is Inactive for the next
-  cycle, and Active only if they completed the previous one. Payments never change
-  status mid-cycle, and a Withdrawn member is never reactivated automatically.
+  cycle's target is Inactive for the next cycle, and Active only if they completed
+  the previous one. The target is the DEPOSIT target only; emergency contributions
+  are not part of it. Ordinary payments never change status mid-cycle, and a
+  Withdrawn member is never reactivated automatically.
+- **Paying old arrears:** closed cycles stay locked, so arrears are paid as a
+  contribution recorded in the active cycle with "Settles arrears of cycle" set. It
+  counts towards the closed cycle's target (not the active cycle's), cannot exceed
+  the arrears owed, and updates the member's status automatically: Active once the
+  most recent closed cycle is fully paid, Inactive again if that payment is reversed.
+- **Reopening a cycle** leaves the statuses set at its first close as they were; they
+  are recalculated when it is closed again.
 - **Loans (Phase 5/6, not built yet):** a loan can never exceed the member's
   previous contributions. Recovery may use all of the member's previous deposits
   (across cycles); emergency contributions are excluded and protected.
