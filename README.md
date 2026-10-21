@@ -61,6 +61,19 @@ during development (member activation, duplicate-activation rejection, wrong-ema
 rejection, role-based 403, document download). A proper `pytest`/`TestCase` suite
 is recommended before Phase 2 — flag if you'd like that added now rather than later.
 
+## Business rules confirmed by FCU
+
+- **Targets:** per member, deposits UGX 600,000 and emergency UGX 30,000 over a
+  6-month cycle, reported separately. Unit targets = eligible (Active) members x those.
+- **Mid-cycle joiners** owe the full cycle amount.
+- **Member status** is assessed when a cycle closes: a member who did not meet the
+  cycle's target (deposits and emergency both cleared) is Inactive for the next
+  cycle, and Active only if they completed the previous one. Payments never change
+  status mid-cycle, and a Withdrawn member is never reactivated automatically.
+- **Loans (Phase 5/6, not built yet):** a loan can never exceed the member's
+  previous contributions. Recovery may use all of the member's previous deposits
+  (across cycles); emergency contributions are excluded and protected.
+
 ## Next phase
 
 The SRS was revised to v1.1 (General Ledger, Financial Position, Cycle Locking,

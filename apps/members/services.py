@@ -17,35 +17,62 @@ from apps.auditlog.models import AuditLog
 from apps.auditlog.utils import log_action
 
 
-@transaction.atomic
-def evaluate_member_status(member, cycle):
+def members_failing_cycle_target(cycle):
     """
-    Recalculate the member's status for the given cycle.
+    Members who have not met the cycle's target: deposits AND emergency
+    obligation both cleared. Withdrawn members are not assessed.
 
-    A member is ACTIVE only when all required monthly savings
-    and emergency contributions for the cycle have been cleared.
-
-    This function is called whenever a contribution is added,
-    updated or deleted.
+    A member who joined mid-cycle owes the full cycle amount.
     """
 
     from apps.contributions.services import member_balance
     from .models import Member
 
+    failing = []
 
-    balance = member_balance(member, cycle)
+    for member in Member.objects.exclude(status=Member.Status.WITHDRAWN):
+        if not member_balance(member, cycle)["eligible"]:
+            failing.append(member)
 
-    if balance["eligible"]:
-        new_status = Member.Status.ACTIVE
-        inactive_reason = ""
-    else:
-        new_status = Member.Status.INACTIVE
-        inactive_reason = Member.InactiveReason.CONTRIBUTION_ARREARS
+    return failing
 
-    if (
-        member.status != new_status
-        or member.inactive_reason != inactive_reason
-    ):
+
+@transaction.atomic
+def apply_cycle_completion_statuses(cycle, actor=None):
+    """
+    Set every member's status for the NEXT cycle from how this cycle ended.
+
+    FCU rule: a member who fails to meet the cycle's target becomes INACTIVE,
+    and is ACTIVE in the next cycle only if the previous cycle was completed.
+    So status is decided once, when a cycle closes. It is deliberately NOT
+    recalculated on each payment: a half-paid member in the middle of a cycle
+    is still on course, and flipping them to Inactive would also move the
+    unit-wide targets (which count Active members) under everyone's feet.
+
+    A WITHDRAWN member is never touched, so a payment can never reactivate them.
+
+    Returns {"activated": [...], "deactivated": [...]} of member codes.
+    """
+
+    from apps.contributions.services import member_balance
+    from .models import Member
+
+    changed = {"activated": [], "deactivated": []}
+
+    for member in Member.objects.exclude(status=Member.Status.WITHDRAWN):
+        if member_balance(member, cycle)["eligible"]:
+            new_status = Member.Status.ACTIVE
+            inactive_reason = ""
+        else:
+            new_status = Member.Status.INACTIVE
+            inactive_reason = Member.InactiveReason.CONTRIBUTION_ARREARS
+
+        if (
+            member.status == new_status
+            and member.inactive_reason == inactive_reason
+        ):
+            continue
+
         old_snapshot = {
             "status": member.status,
             "inactive_reason": member.inactive_reason,
@@ -53,24 +80,27 @@ def evaluate_member_status(member, cycle):
 
         member.status = new_status
         member.inactive_reason = inactive_reason
-        member.save(
-            update_fields=[
-                "status",
-                "inactive_reason",
-            ]
-        )
+        member.save(update_fields=["status", "inactive_reason"])
 
         log_action(
             AuditLog.Action.STATUS_CHANGE,
             instance=member,
+            actor=actor,
             old_value=old_snapshot,
             new_value={
                 "status": member.status,
                 "inactive_reason": member.inactive_reason,
+                "event": "CYCLE_COMPLETION_ASSESSED",
+                "cycle": str(cycle),
             },
         )
 
-    return member
+        key = "activated" if new_status == Member.Status.ACTIVE else "deactivated"
+        changed[key].append(member.member_code)
+
+    return changed
+
+
 # ============================================================
 # MEMBER FINANCIAL SUMMARY
 # ============================================================

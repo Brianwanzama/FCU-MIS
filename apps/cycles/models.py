@@ -446,6 +446,16 @@ class Cycle(models.Model):
                 f"{self.payment_window_closes:%d %b %Y} (Manual 3.2). Contributions "
                 f"may still legitimately arrive."
             )
+
+        from apps.members.services import members_failing_cycle_target
+
+        failing = members_failing_cycle_target(self)
+        if failing:
+            codes = ", ".join(m.member_code for m in failing)
+            issues.append(
+                f"{len(failing)} member(s) have not met this cycle's target and will "
+                f"become Inactive for the next cycle: {codes}."
+            )
         # Phase 5+ will extend this with: outstanding loans (Manual 4.5(d)),
         # unpaid contributions, unreconciled ledger entries.
         return issues

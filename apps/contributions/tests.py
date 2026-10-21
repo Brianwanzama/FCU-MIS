@@ -118,3 +118,81 @@ class CurrencyFilterTests(SimpleTestCase):
     def test_bad_values_do_not_break_the_page(self):
         self.assertEqual(self.render(None), "UGX 0")
         self.assertEqual(self.render(""), "UGX 0")
+
+
+class MemberStatusRuleTests(TestCase):
+    """
+    Status is decided when a cycle closes: fail the target and you are Inactive
+    for the next cycle; complete it and you are Active.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.actor = User.objects.create_user(
+            username="admin1", password="x", role=User.Role.ADMINISTRATOR
+        )
+        cls.cycle = cycle_services.create_cycle(
+            Cycle(cycle_number=1, start_date=date(2026, 1, 1), duration_months=6),
+            actor=cls.actor,
+        )
+        cycle_services.activate_cycle(cls.cycle, actor=cls.actor)
+        codes = list(Member.objects.order_by("member_code").values_list("pk", flat=True))
+        cls.full, cls.partial, cls.withdrawn = (Member.objects.get(pk=pk) for pk in codes[:3])
+        Member.objects.filter(pk=cls.withdrawn.pk).update(status=Member.Status.WITHDRAWN)
+
+    def pay(self, member, kind, amount):
+        services.record_contribution(
+            Contribution(
+                member=member, cycle=self.cycle, contribution_type=kind,
+                amount=Decimal(amount), period_month=date(2026, 1, 1),
+                payment_date=date(2026, 1, 5), payment_method="CASH",
+                recorded_by=self.actor,
+            ),
+            actor=self.actor,
+        )
+
+    def status(self, member):
+        member.refresh_from_db()
+        return member.status
+
+    def test_part_payment_mid_cycle_does_not_make_a_member_inactive(self):
+        self.pay(self.partial, M.MONTHLY, "100000")
+        self.assertEqual(self.status(self.partial), Member.Status.ACTIVE)
+
+    def test_closing_deactivates_members_who_missed_the_target(self):
+        self.pay(self.full, M.MONTHLY, "600000")
+        self.pay(self.full, M.EMERGENCY, "30000")
+        self.pay(self.partial, M.MONTHLY, "100000")
+
+        cycle_services.close_cycle(self.cycle, actor=self.actor)
+
+        self.assertEqual(self.status(self.full), Member.Status.ACTIVE)
+        self.assertEqual(self.status(self.partial), Member.Status.INACTIVE)
+        self.assertEqual(
+            self.partial.inactive_reason, Member.InactiveReason.CONTRIBUTION_ARREARS
+        )
+
+    def test_missing_only_the_emergency_obligation_still_fails_the_cycle(self):
+        self.pay(self.full, M.MONTHLY, "600000")
+        cycle_services.close_cycle(self.cycle, actor=self.actor)
+        self.assertEqual(self.status(self.full), Member.Status.INACTIVE)
+
+    def test_withdrawn_member_is_never_reactivated(self):
+        self.pay(self.withdrawn, M.MONTHLY, "600000")
+        self.pay(self.withdrawn, M.EMERGENCY, "30000")
+        cycle_services.close_cycle(self.cycle, actor=self.actor)
+        self.assertEqual(self.status(self.withdrawn), Member.Status.WITHDRAWN)
+
+    def test_close_warns_about_members_who_will_become_inactive(self):
+        self.pay(self.partial, M.MONTHLY, "100000")
+        issues = self.cycle.blocking_issues_for_close()
+        self.assertTrue(any("will become Inactive" in i for i in issues))
+
+    def test_closing_is_recorded_in_the_audit_log(self):
+        cycle_services.close_cycle(self.cycle, actor=self.actor)
+        from apps.auditlog.models import AuditLog
+
+        entry = AuditLog.objects.filter(
+            new_value__event="CYCLE_CLOSED"
+        ).latest("pk")
+        self.assertIn(self.partial.member_code, entry.new_value["members_deactivated"])

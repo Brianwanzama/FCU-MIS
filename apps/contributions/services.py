@@ -9,7 +9,7 @@ Responsibilities
 2. Ensure contributions belong to the active cycle.
 3. Prevent modifications to locked cycles.
 4. Maintain a complete audit trail.
-5. Trigger member-status recalculation after every payment.
+5. Leave member status alone: it is assessed once, when the cycle closes.
 6. Provide reusable summaries for dashboards, reports and loans.
 """
 
@@ -53,8 +53,6 @@ def record_contribution(contribution, actor=None):
         new_value=_snapshot(contribution),
     )
 
-    _update_member_status(contribution)
-
     return contribution
 
 
@@ -84,8 +82,6 @@ def update_contribution(contribution, old_snapshot, actor=None):
         new_value=_snapshot(contribution),
     )
 
-    _update_member_status(contribution)
-
     return contribution
 
 
@@ -107,9 +103,6 @@ def delete_contribution(contribution, actor=None):
     snapshot = _snapshot(contribution)
     repr_ = str(contribution)
     pk = contribution.pk
-    member = contribution.member
-    cycle = contribution.cycle
-
     contribution.delete()
 
     log_action(
@@ -121,8 +114,6 @@ def delete_contribution(contribution, actor=None):
         old_value=snapshot,
         new_value={"event": "CONTRIBUTION_DELETED"},
     )
-
-    _update_member_status_by_objects(member, cycle)
 
     return repr_
 
@@ -302,32 +293,6 @@ def _validate_active_cycle(contribution):
             f"Contributions may only be recorded against the ACTIVE cycle. "
             f"{contribution.cycle} is {contribution.cycle.get_status_display()}."
         )
-
-
-def _update_member_status(contribution):
-    """
-    Trigger member-status recalculation.
-    """
-
-    from apps.members.services import evaluate_member_status
-
-    evaluate_member_status(
-        contribution.member,
-        contribution.cycle,
-    )
-
-
-def _update_member_status_by_objects(member, cycle):
-    """
-    Trigger recalculation after delete().
-    """
-
-    from apps.members.services import evaluate_member_status
-
-    evaluate_member_status(
-        member,
-        cycle,
-    )
 
 
 def _snapshot(contribution):

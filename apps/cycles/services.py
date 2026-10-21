@@ -162,6 +162,11 @@ def close_cycle(cycle, actor=None, acknowledged_warnings=None):
     cycle.closed_by = actor
     cycle.save()
 
+    # Members who did not complete this cycle become Inactive for the next one.
+    from apps.members.services import apply_cycle_completion_statuses
+
+    status_changes = apply_cycle_completion_statuses(cycle, actor=actor)
+
     log_action(
         AuditLog.Action.STATUS_CHANGE,
         instance=cycle,
@@ -171,6 +176,8 @@ def close_cycle(cycle, actor=None, acknowledged_warnings=None):
             "status": cycle.status,
             "event": "CYCLE_CLOSED",
             "warnings_acknowledged": acknowledged_warnings or [],
+            "members_deactivated": status_changes["deactivated"],
+            "members_activated": status_changes["activated"],
         },
     )
     return cycle
