@@ -140,17 +140,17 @@ class EligibilityTests(LoanTestCase):
         r = services.check_eligibility(self.m1, amount=Decimal("500000"), months=3)
         self.assertTrue(r["eligible"], r["checks"])
 
-    def test_limit_is_120_percent_of_accumulated_deposits_not_emergency(self):
+    def test_limit_is_100_percent_of_accumulated_deposits_not_emergency(self):
         info = services.loan_limit(self.m1)
         self.assertEqual(info["pool"], Decimal("600000"))
-        self.assertEqual(info["limit"], Decimal("720000"))
+        self.assertEqual(info["limit"], Decimal("600000"))
 
     def test_amount_above_the_limit_blocks(self):
         services.upload_undertaking(self.m1, pdf("d.pdf"), self.u1)
-        r = services.check_eligibility(self.m1, amount=Decimal("720001"), months=3)
+        r = services.check_eligibility(self.m1, amount=Decimal("600001"), months=3)
         self.assertFalse(r["eligible"])
         self.assertFalse(self.passed(r)["amount"])
-        r = services.check_eligibility(self.m1, amount=Decimal("720000"), months=3)
+        r = services.check_eligibility(self.m1, amount=Decimal("600000"), months=3)
         self.assertTrue(r["eligible"])
 
     def test_inactive_member_cannot_borrow(self):
@@ -221,7 +221,7 @@ class SubmissionTests(LoanTestCase):
         self.assertEqual(a.status, LoanApplication.Status.SUBMITTED)
         self.assertEqual(a.amount_requested, Decimal("500000"))
         self.assertTrue(a.eligibility_snapshot["eligible"])
-        self.assertEqual(a.eligibility_snapshot["limit"], "720000")
+        self.assertEqual(a.eligibility_snapshot["limit"], "600000")
         self.assertTrue(a.application_form.path.startswith(TMP))
         self.assertEqual(a.undertaking.status, SignedUndertaking.Status.PENDING)
 

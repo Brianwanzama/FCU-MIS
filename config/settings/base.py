@@ -222,8 +222,10 @@ FCU_DEFAULT_LOAN_INTEREST_PERCENT = env.float(
     default=5.0,
 )
 
-# Manual 4.4 (v3.0): a member may borrow up to 120% of accumulated Contributions.
-FCU_LOAN_LIMIT_PERCENT = env.float("FCU_LOAN_LIMIT_PERCENT", default=120.0)
+# A member may borrow up to this percentage of accumulated deposits. FCU has decided
+# on 100% (a loan can never exceed previous contributions). Manual v3.0 4.4 and the
+# official form still say 120%: amend them to match, or set this to 120.
+FCU_LOAN_LIMIT_PERCENT = env.float("FCU_LOAN_LIMIT_PERCENT", default=100.0)
 
 # Manual 4.5(b): maximum repayment period.
 FCU_MAX_LOAN_REPAYMENT_MONTHS = 3

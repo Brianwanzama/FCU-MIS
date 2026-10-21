@@ -149,8 +149,8 @@ Members apply from **Loans** in the menu (`/loans/`):
    up to 5 MB, checked by content). The signed Declaration is uploaded once and reused.
 3. The system checks Manual 4.3 before accepting the application: Active member,
    declaration on file, no other open application, deposits up to date (month due by the
-   10th of the next month), amount within **120% of accumulated deposits** (emergency
-   excluded, Manual 4.4), repayment of **at most 3 months that finishes inside the
+   10th of the next month), amount within **100% of accumulated deposits** (emergency
+   excluded; FCU's decision, Manual 4.4 and the form still say 120%), repayment of **at most 3 months that finishes inside the
    running cycle** (4.5). Overdue emergency contributions are shown as a warning only.
 4. The Administrator or Chairperson approves or rejects (never their own application).
    Approval needs a **verified** Declaration, re-runs the checks, and fixes the schedule:
@@ -166,7 +166,7 @@ No guarantor is needed (4.2(b)).
 handed out only by views that check the requester. On Railway, mount a persistent volume
 and point `FCU_PRIVATE_MEDIA_ROOT` at it, or uploads are lost on every deploy.
 
-Settings: `FCU_LOAN_LIMIT_PERCENT` (default 120), `FCU_DEFAULT_LOAN_INTEREST_PERCENT`
+Settings: `FCU_LOAN_LIMIT_PERCENT` (default 100), `FCU_DEFAULT_LOAN_INTEREST_PERCENT`
 (5, per month), `FCU_UPLOAD_MAX_MB` (5). The old `FCU_DEFAULT_MAX_LOAN_*` settings are gone.
 Run `python manage.py migrate`: adds `loans.0001` and `contributions.0004`.
 

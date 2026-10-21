@@ -87,7 +87,7 @@ class DisbursementTests(LendingCase):
 
     def test_loan_limit_is_reduced_by_what_is_owed(self):
         loan = self.make_loan("300000")
-        self.assertEqual(services.loan_limit(self.m1)["limit"], Decimal("720000") - loan.outstanding)
+        self.assertEqual(services.loan_limit(self.m1)["limit"], Decimal("600000") - loan.outstanding)
 
     def test_approved_but_unpaid_application_blocks_a_second_one(self):
         self.verified_undertaking()
@@ -213,7 +213,7 @@ class OverdueAndRecoveryTests(LendingCase):
         self.assertIsNone(offset.recorded_by)  # automatic
 
     def test_partial_recovery_leaves_the_rest_outstanding(self):
-        loan = self.make_loan("720000")
+        loan = self.make_loan("600000")
         out = services.recover_loan_from_savings(loan, today=self.after_deadline(loan))
         loan.refresh_from_db()
         self.assertEqual(out["recovered"], Decimal("600000"))  # all deposits
@@ -223,7 +223,7 @@ class OverdueAndRecoveryTests(LendingCase):
         self.assertEqual(loan.display_status(), "Defaulted")
 
     def test_emergency_contributions_are_never_recovered(self):
-        loan = self.make_loan("720000")
+        loan = self.make_loan("600000")
         services.recover_loan_from_savings(loan, today=self.after_deadline(loan))
         emergency = Contribution.objects.get(member=self.m1, contribution_type="EMERGENCY")
         self.assertEqual(emergency.amount, Decimal("30000"))
@@ -235,7 +235,7 @@ class OverdueAndRecoveryTests(LendingCase):
         self.assertEqual(services.recovery_preview(loan)["savings"], Decimal("600000"))
 
     def test_running_twice_never_recovers_twice(self):
-        loan = self.make_loan("720000")
+        loan = self.make_loan("600000")
         day = self.after_deadline(loan)
         services.recover_loan_from_savings(loan, today=day)
         again = services.recover_loan_from_savings(loan, today=day)
@@ -243,7 +243,7 @@ class OverdueAndRecoveryTests(LendingCase):
         self.assertEqual(LoanRepayment.objects.filter(kind="SAVINGS_OFFSET").count(), 1)
 
     def test_database_forbids_two_live_recoveries_in_one_day(self):
-        loan = self.make_loan("720000")
+        loan = self.make_loan("600000")
         day = self.after_deadline(loan)
         services.recover_loan_from_savings(loan, today=day)
         with self.assertRaises(IntegrityError), transaction.atomic():
@@ -266,7 +266,7 @@ class OverdueAndRecoveryTests(LendingCase):
         self.assertTrue(AuditLog.objects.filter(new_value__event="LOAN_DEFAULTED").exists())
 
     def test_with_no_savings_left_nothing_more_is_taken_until_new_deposits_arrive(self):
-        loan = self.make_loan("720000")
+        loan = self.make_loan("600000")
         day = self.after_deadline(loan)
         services.recover_loan_from_savings(loan, today=day)  # takes all 600,000
         next_day = day + timedelta(days=1)
@@ -322,7 +322,7 @@ class OverdueAndRecoveryTests(LendingCase):
 
     # ---- effects on the member ------------------------------------------------------
     def test_recovery_makes_the_member_inactive_until_they_pay_up(self):
-        loan = self.make_loan("720000")
+        loan = self.make_loan("600000")
         services.recover_loan_from_savings(loan, today=self.after_deadline(loan))
         self.m1.refresh_from_db()
         self.assertEqual(self.m1.status, Member.Status.INACTIVE)
@@ -333,7 +333,7 @@ class OverdueAndRecoveryTests(LendingCase):
         self.assertEqual(self.m1.inactive_reason, "")
 
     def test_recovery_reduces_the_cycle_contribution_position_not_the_deposits(self):
-        loan = self.make_loan("720000")
+        loan = self.make_loan("600000")
         services.recover_loan_from_savings(loan, today=self.after_deadline(loan))
         summary = cs.member_contribution_summary(self.m1, self.cycle)
         self.assertEqual(summary["monthly_paid"], Decimal("600000"))
@@ -341,7 +341,7 @@ class OverdueAndRecoveryTests(LendingCase):
         self.assertEqual(summary["monthly_balance"], Decimal("600000"))  # target 600k, credit 0
 
     def test_statement_shows_the_offset(self):
-        loan = self.make_loan("720000")
+        loan = self.make_loan("600000")
         services.recover_loan_from_savings(loan, today=self.after_deadline(loan))
         s = member_statement(self.m1, self.cycle)
         self.assertEqual(len(s["offsets"]), 1)
@@ -349,7 +349,7 @@ class OverdueAndRecoveryTests(LendingCase):
         self.assertEqual(s["deposits_paid"], Decimal("600000"))  # originals untouched
 
     def test_withdrawn_member_is_not_touched_by_recovery_status(self):
-        loan = self.make_loan("720000")
+        loan = self.make_loan("600000")
         Member.objects.filter(pk=self.m1.pk).update(status=Member.Status.WITHDRAWN)
         services.recover_loan_from_savings(loan, today=self.after_deadline(loan))
         self.m1.refresh_from_db()
@@ -456,7 +456,7 @@ class LendingViewTests(LendingCase):
         self.assertEqual(r.context["summary"]["loan"]["balance"], loan.outstanding)
 
     def test_statement_pdf_with_a_recovery(self):
-        loan = self.make_loan("720000")
+        loan = self.make_loan("600000")
         services.recover_loan_from_savings(loan, today=self.after_deadline(loan))
         self.login("u1")
         r = self.client.get(f"/members/{self.m1.member_code}/statement.pdf?cycle={self.cycle.pk}")

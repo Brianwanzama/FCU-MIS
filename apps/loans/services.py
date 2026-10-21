@@ -173,7 +173,7 @@ def member_loan_summary(member):
 
 
 def loan_limit(member):
-    """Manual 4.4: a percentage (120%) of accumulated Contributions, less what is already owed."""
+    """A percentage (FCU: 100%) of accumulated deposits, less what is already owed."""
 
     pool = member_available_savings(member)
     percent = Decimal(str(settings.FCU_LOAN_LIMIT_PERCENT))
@@ -295,7 +295,7 @@ def check_eligibility(
 
     add(
         "limit",
-        f"Contributions to borrow against (Manual 4.4: up to {limit_info['percent']:g}%)",
+        f"Deposits to borrow against (up to {limit_info['percent']:g}% of your deposits)",
         limit_info["limit"] > 0,
         f"Accumulated deposits UGX {limit_info['pool']:,.0f}; you may borrow up to UGX {limit_info['limit']:,.0f}.",
     )
