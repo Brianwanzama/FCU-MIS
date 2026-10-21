@@ -355,15 +355,19 @@ class Cycle(models.Model):
     @property
     def eligible_member_count(self):
         """
-        Members counted towards the unit-wide targets: currently ACTIVE members.
+        Members counted towards the unit-wide targets.
 
-        Computed on read, never stored. NOTE: this is today's headcount. Per-cycle
-        eligibility (join and withdrawal dates) is a later roadmap item; until
-        then a closed cycle's unit targets follow the current headcount.
+        An UPCOMING cycle has no membership record yet, so it projects today's
+        Active headcount. Once a cycle has been activated, its own membership
+        record is used, so the targets of a past cycle never change when
+        members later join or leave.
         """
-        from apps.members.models import Member
+        if self.status == self.Status.UPCOMING and self.activated_at is None:
+            from apps.members.models import Member
 
-        return Member.objects.filter(status=Member.Status.ACTIVE).count()
+            return Member.objects.filter(status=Member.Status.ACTIVE).count()
+
+        return self.memberships.filter(left_on__isnull=True).count()
 
     @property
     def unit_deposit_target(self):
@@ -423,6 +427,45 @@ class Cycle(models.Model):
             return False, "This cycle has financial records attached and cannot be deleted."
         return True, ""
 
+    def out_of_range_payments(self):
+        """
+        Payments counting towards this cycle whose month lies outside the
+        cycle's (possibly revised) dates. They need a person to review them.
+        """
+        from apps.contributions.services import cycle_payments
+
+        first = self.start_date.replace(day=1)
+        last = (self.end_date or self.derive_end_date()).replace(day=1)
+
+        return cycle_payments(self).exclude(
+            period_month__gte=first, period_month__lte=last
+        )
+
+    def pending_reversals(self):
+        from apps.contributions.models import ContributionReversal
+
+        return ContributionReversal.objects.filter(
+            status=ContributionReversal.Status.PENDING,
+            contribution__cycle=self,
+        )
+
+    def hard_blockers_for_close(self):
+        """
+        Things that must be settled before closing. Unlike the warnings below,
+        these stop the close: closing locks the records, and a reversal that is
+        still waiting for approval could never be decided cleanly afterwards.
+        """
+        blockers = []
+
+        pending = self.pending_reversals().count()
+        if pending:
+            blockers.append(
+                f"{pending} reversal request(s) are still pending approval. "
+                f"Approve or reject them before closing."
+            )
+
+        return blockers
+
     def blocking_issues_for_close(self):
         """
         Reasons an Administrator should think twice before closing. Returned as a
@@ -449,6 +492,13 @@ class Cycle(models.Model):
 
         from apps.members.services import members_failing_cycle_target
 
+        flagged = self.out_of_range_payments().count()
+        if flagged:
+            issues.append(
+                f"{flagged} payment(s) fall outside this cycle's dates and have "
+                f"not been reviewed."
+            )
+
         failing = members_failing_cycle_target(self)
         if failing:
             codes = ", ".join(m.member_code for m in failing)
@@ -456,6 +506,53 @@ class Cycle(models.Model):
                 f"{len(failing)} member(s) have not met this cycle's target and will "
                 f"become Inactive for the next cycle: {codes}."
             )
+        from apps.contributions.services import cycle_contribution_summary
+
+        totals = cycle_contribution_summary(self)
+        if totals["outstanding"] > 0:
+            issues.append(
+                f"Deposits outstanding: UGX {totals['outstanding']:,.0f} of "
+                f"UGX {totals['expected']:,.0f}."
+            )
+        if totals["emergency_outstanding"] > 0:
+            issues.append(
+                f"Emergency contributions outstanding: "
+                f"UGX {totals['emergency_outstanding']:,.0f}."
+            )
         # Phase 5+ will extend this with: outstanding loans (Manual 4.5(d)),
-        # unpaid contributions, unreconciled ledger entries.
+        # unreconciled ledger entries.
         return issues
+
+
+
+class CycleMembership(models.Model):
+    """
+    Who was eligible in a cycle, and from when until when.
+
+    Targets must not drift as members come and go, so a cycle's unit-wide
+    targets count the members recorded here, not today's headcount:
+
+    * activating a cycle records every Active member at that moment;
+    * a member who becomes Active during the cycle (a new joiner, or someone who
+      cleared old arrears) is added and owes the full cycle amount;
+    * a member who withdraws gets `left_on` set and stops counting.
+
+    Closed cycles never change after closing, so their targets stay put.
+    """
+
+    cycle = models.ForeignKey(Cycle, on_delete=models.PROTECT, related_name="memberships")
+    member = models.ForeignKey(
+        "members.Member", on_delete=models.PROTECT, related_name="cycle_memberships"
+    )
+    joined_on = models.DateField()
+    left_on = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["member__member_code"]
+        constraints = [
+            models.UniqueConstraint(fields=["cycle", "member"], name="one_membership_per_member_per_cycle"),
+        ]
+
+    def __str__(self):
+        return f"{self.member.member_code} in {self.cycle}"

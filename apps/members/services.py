@@ -30,7 +30,13 @@ def members_failing_cycle_target(cycle):
 
     failing = []
 
-    for member in Member.objects.exclude(status=Member.Status.WITHDRAWN):
+    # Only members who were eligible in this cycle owed its target.
+    members = Member.objects.filter(
+        cycle_memberships__cycle=cycle,
+        cycle_memberships__left_on__isnull=True,
+    ).exclude(status=Member.Status.WITHDRAWN)
+
+    for member in members:
         if not member_balance(member, cycle)["eligible"]:
             failing.append(member)
 

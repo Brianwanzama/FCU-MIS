@@ -24,7 +24,7 @@ from django.utils import timezone
 from apps.auditlog.models import AuditLog
 from apps.auditlog.utils import log_action
 
-from .models import Cycle
+from .models import Cycle, CycleMembership
 
 
 class CycleTransitionError(ValidationError):
@@ -78,6 +78,30 @@ def update_cycle(cycle, old_snapshot, actor=None):
         new_value=new_snapshot,
     )
 
+    # Moving the dates changes which months the cycle covers. Contribution
+    # targets recalculate by themselves (they are derived from the dates), but
+    # payments that now fall outside the cycle must be reviewed by a person.
+    date_fields = ("start_date", "duration_months")
+    if any(old_snapshot.get(f) != new_snapshot.get(f) for f in date_fields):
+        flagged = list(cycle.out_of_range_payments().values_list("pk", flat=True))
+        log_action(
+            AuditLog.Action.SETTINGS_CHANGE,
+            instance=cycle,
+            actor=actor,
+            old_value={
+                "start_date": old_snapshot.get("start_date"),
+                "duration_months": old_snapshot.get("duration_months"),
+                "end_date": old_snapshot.get("end_date"),
+            },
+            new_value={
+                "event": "CYCLE_DATES_CHANGED",
+                "start_date": new_snapshot.get("start_date"),
+                "duration_months": new_snapshot.get("duration_months"),
+                "end_date": new_snapshot.get("end_date"),
+                "payments_flagged_for_review": flagged,
+            },
+        )
+
     # Manual 3.1 fixes the contribution amounts; 11.4 allows the General Meeting
     # to amend them. Changing them is therefore a policy amendment, not routine
     # data entry, and gets its own audit entry so it is findable as one.
@@ -96,6 +120,21 @@ def update_cycle(cycle, old_snapshot, actor=None):
             new_value=changed,
         )
     return cycle
+
+
+def record_cycle_membership(cycle):
+    """
+    Record who is eligible in this cycle: every Active member at activation.
+    Returns how many members were recorded.
+    """
+    from apps.members.models import Member
+
+    for member in Member.objects.filter(status=Member.Status.ACTIVE):
+        CycleMembership.objects.get_or_create(
+            cycle=cycle, member=member, defaults={"joined_on": cycle.start_date}
+        )
+
+    return cycle.memberships.count()
 
 
 @transaction.atomic
@@ -127,12 +166,18 @@ def activate_cycle(cycle, actor=None):
     cycle.activated_by = actor
     cycle.save()
 
+    members_recorded = record_cycle_membership(cycle)
+
     log_action(
         AuditLog.Action.STATUS_CHANGE,
         instance=cycle,
         actor=actor,
         old_value={"status": old},
-        new_value={"status": cycle.status, "event": "CYCLE_ACTIVATED"},
+        new_value={
+            "status": cycle.status,
+            "event": "CYCLE_ACTIVATED",
+            "eligible_members": members_recorded,
+        },
     )
     return cycle
 
@@ -155,6 +200,10 @@ def close_cycle(cycle, actor=None, acknowledged_warnings=None):
             f"{cycle} has never been active, so there is nothing to close. "
             f"Delete it instead if it was created in error."
         )
+
+    blockers = cycle.hard_blockers_for_close()
+    if blockers:
+        raise CycleTransitionError(" ".join(blockers))
 
     old = cycle.status
     cycle.status = Cycle.Status.CLOSED

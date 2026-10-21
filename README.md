@@ -103,6 +103,25 @@ is recommended before Phase 2 — flag if you'd like that added now rather than 
   `/contributions/<id>/reverse/`, `/contributions/reversals/`.
 - Run `python manage.py migrate` after pulling: this adds migration `0003`.
 
+## Cycle management
+
+- **Who was eligible:** each cycle keeps its own membership record
+  (`CycleMembership`). Activating a cycle records every Active member; a member who
+  becomes Active mid-cycle (new joiner, or cleared arrears) is added and owes the
+  full amount; a member who withdraws gets a leave date and stops counting. A cycle's
+  unit targets use this record, so they no longer change when members later join or
+  leave. An Upcoming cycle projects today's Active headcount. Cycles that were already
+  running when this was added were back-filled from the members Active at that time.
+- **Editing dates:** start date and duration can be changed while a cycle is Upcoming
+  or Active. Targets recalculate, the change is audited (old and new dates), and any
+  payment whose month now falls outside the cycle is flagged on the cycle page and
+  in the close warnings for review.
+- **Closing:** a cycle cannot be closed while a reversal request is pending (hard
+  block). The close screen also warns about outstanding deposits, outstanding
+  emergency contributions, flagged payments and the members who will become Inactive.
+  Outstanding loans will be added when the Loans module exists.
+- Run `python manage.py migrate` after pulling: adds migrations `cycles.0002` and `0003`.
+
 ## Next phase
 
 The SRS was revised to v1.1 (General Ledger, Financial Position, Cycle Locking,
