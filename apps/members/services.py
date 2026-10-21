@@ -183,12 +183,9 @@ def member_financial_summary(member, cycle):
         cycle,
     )
 
-    # Placeholder until the Loans module is built.
-    loan = {
-        "borrowed": Decimal("0"),
-        "repaid": Decimal("0"),
-        "balance": Decimal("0"),
-    }
+    from apps.loans.services import member_loan_summary
+
+    loan = member_loan_summary(member)
 
     # Placeholder until the Investments module is built.
     investment = {
@@ -283,18 +280,19 @@ def member_investment_summary(member):
 
 def member_available_savings(member):
     """
-    Deposits the member has paid across ALL cycles (reversed payments excluded).
+    Deposits the member has paid across ALL cycles (reversed payments excluded),
+    less any already recovered to repay a loan.
 
     Emergency contributions are not included: they are ring-fenced and never
-    available for loan recovery. Loan balances will be deducted here once the
-    Loans module exists.
+    available for loan recovery.
     """
 
     from django.db.models import Sum
 
     from apps.contributions.models import Contribution
+    from apps.loans.models import LoanRepayment
 
-    return (
+    deposits = (
         Contribution.objects.filter(
             member=member,
             contribution_type=Contribution.ContributionType.MONTHLY,
@@ -302,6 +300,18 @@ def member_available_savings(member):
         ).aggregate(total=Sum("amount"))["total"]
         or Decimal("0")
     )
+
+    # Savings already used to repay a loan are no longer available.
+    offsets = (
+        LoanRepayment.objects.filter(
+            loan__member=member,
+            kind=LoanRepayment.Kind.SAVINGS_OFFSET,
+            reversed_at__isnull=True,
+        ).aggregate(total=Sum("amount"))["total"]
+        or Decimal("0")
+    )
+
+    return deposits - offsets
 
 
 def statement_cycles(member=None):
@@ -379,10 +389,23 @@ def member_statement(member, cycle):
             }
         )
 
+    from apps.loans.models import LoanRepayment
+
+    offsets = list(
+        LoanRepayment.objects.filter(
+            loan__member=member,
+            cycle=cycle,
+            kind=LoanRepayment.Kind.SAVINGS_OFFSET,
+            reversed_at__isnull=True,
+        ).select_related("loan__application").order_by("payment_date", "id")
+    )
+
     return {
         "member": member,
         "cycle": cycle,
         "generated_at": timezone.localtime(),
+        "deposits_offsets": contributions["monthly_offsets"],
+        "offsets": offsets,
         "deposit_target": contributions["monthly_due"],
         "deposits_paid": contributions["monthly_paid"],
         "deposits_outstanding": max(contributions["monthly_balance"], Decimal("0")),
@@ -394,3 +417,74 @@ def member_statement(member, cycle):
         "target_met": contributions["monthly_balance"] <= 0,
         "rows": rows,
     }
+
+
+# ============================================================
+# STATUS AFTER LOAN RECOVERY (Manual 4.6(d))
+# ============================================================
+
+@transaction.atomic
+def reassess_after_loan_recovery(member, actor=None):
+    """
+    Manual 4.6(d): when recovery takes a member's contributions below what the
+    current cycle requires, the member becomes Inactive until the contribution
+    position is restored. This runs after a recovery and after every later
+    contribution, so the member returns to Active automatically once they have
+    paid back up. A Withdrawn member is never touched, and an Inactive member
+    whose reason is something else (arrears from a closed cycle) is left alone.
+    """
+
+    from apps.contributions.services import contribution_arrears_to_date
+    from apps.cycles.services import get_active_cycle
+
+    from .models import Member
+
+    member.refresh_from_db(fields=["status", "inactive_reason"])
+    cycle = get_active_cycle()
+
+    if cycle is None or member.status == Member.Status.WITHDRAWN:
+        return None
+
+    short = contribution_arrears_to_date(member, cycle)["deposit_arrears"] > 0
+
+    if member.status == Member.Status.ACTIVE and short and _has_live_recovery(member, cycle):
+        new_status, reason = Member.Status.INACTIVE, Member.InactiveReason.LOAN_RECOVERY
+    elif (
+        member.status == Member.Status.INACTIVE
+        and member.inactive_reason == Member.InactiveReason.LOAN_RECOVERY
+        and not short
+    ):
+        new_status, reason = Member.Status.ACTIVE, ""
+    else:
+        return None
+
+    old = {"status": member.status, "inactive_reason": member.inactive_reason}
+    member.status = new_status
+    member.inactive_reason = reason
+    member.save(update_fields=["status", "inactive_reason"])
+
+    log_action(
+        AuditLog.Action.STATUS_CHANGE,
+        instance=member,
+        actor=actor,
+        old_value=old,
+        new_value={
+            "status": new_status,
+            "inactive_reason": reason,
+            "event": "LOAN_RECOVERY_STATUS_ASSESSED",
+            "cycle": str(cycle),
+        },
+    )
+
+    return new_status
+
+
+def _has_live_recovery(member, cycle):
+    from apps.loans.models import LoanRepayment
+
+    return LoanRepayment.objects.filter(
+        loan__member=member,
+        cycle=cycle,
+        kind=LoanRepayment.Kind.SAVINGS_OFFSET,
+        reversed_at__isnull=True,
+    ).exists()

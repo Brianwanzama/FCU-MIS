@@ -94,8 +94,30 @@ def render_statement_pdf(statement, organisation="Financial Cycle Unit (FCU)"):
             header=False,
             align_right_from=1,
         ),
-        Paragraph("Payment ledger", h2),
     ]
+
+    if statement["offsets"]:
+        story.append(Paragraph("Savings recovered for loans", h2))
+        story.append(
+            _table(
+                [["Date", "Loan", "Amount"]]
+                + [
+                    [f"{o.payment_date:%d %b %Y}", o.loan.reference, ugx(o.amount)]
+                    for o in statement["offsets"]
+                ],
+                [40 * mm, 60 * mm, 50 * mm],
+                align_right_from=2,
+            )
+        )
+        story.append(
+            Paragraph(
+                "Your original deposits are unchanged. A recovery is a separate transaction that "
+                "lowers your contribution position for the cycle.",
+                small,
+            )
+        )
+
+    story.append(Paragraph("Payment ledger", h2))
 
     data = [["Date", "Description", "Method / ref", "Deposit", "Emergency", "Deposits to date"]]
     for row in statement["rows"]:

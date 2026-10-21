@@ -79,6 +79,18 @@
   </div>
 </div>
 
+{% if statement.offsets %}
+  <div class="alert alert-warning small">
+    <strong>Savings recovered for loans in this cycle: {{ statement.deposits_offsets|ugx }}.</strong>
+    Your original deposits are unchanged; the recovery is a separate transaction that lowers your contribution position.
+    <ul class="mb-0 mt-1">
+      {% for o in statement.offsets %}
+        <li>{{ o.payment_date|date:"d M Y" }} &middot; {{ o.loan.reference }} &middot; {{ o.amount|ugx }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}
+
 <h2 class="h5">Payment ledger</h2>
 <div class="card fcu-card">
   <div class="table-responsive">

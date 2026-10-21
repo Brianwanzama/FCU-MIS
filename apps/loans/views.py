@@ -11,16 +11,31 @@ from django.views import View
 
 from apps.documents.models import DocumentTemplate
 
-from .forms import DecisionForm, LoanApplicationForm, ReviewForm, UndertakingUploadForm
-from .models import LoanApplication, SignedUndertaking
+from .forms import (
+    DecisionForm,
+    DisbursementForm,
+    LoanApplicationForm,
+    RepaymentForm,
+    ReversalReasonForm,
+    ReviewForm,
+    UndertakingUploadForm,
+)
+from .models import Loan, LoanApplication, LoanRepayment, SignedUndertaking
 from .services import (
     LoanError,
     approve_application,
     check_eligibility,
     current_undertaking,
+    disburse_loan,
     loan_schedule,
+    overdue_loans,
+    recovery_enabled,
+    recovery_preview,
+    record_repayment,
     reject_application,
+    reverse_repayment,
     review_undertaking,
+    run_recovery,
     submit_application,
     upload_undertaking,
     withdraw_application,
@@ -76,6 +91,7 @@ class MyLoansView(MemberRequiredMixin, View):
                 "undertaking": current_undertaking(member),
                 "undertaking_form": UndertakingUploadForm(),
                 "applications": member.loan_applications.select_related("cycle"),
+                "loans": member.loans.select_related("application"),
             },
         )
 
@@ -215,7 +231,7 @@ class ApplicationDetailView(ApplicationAccessMixin, View):
                 require_verified=True,
             )
 
-        if application.status == LoanApplication.Status.APPROVED:
+        if application.status in (LoanApplication.Status.APPROVED, LoanApplication.Status.DISBURSED):
             schedule = [
                 {**row, "due_date": date.fromisoformat(row["due_date"])}
                 for row in application.approved_schedule
@@ -234,10 +250,15 @@ class ApplicationDetailView(ApplicationAccessMixin, View):
                 "application": application,
                 "checks": checks,
                 "schedule": schedule,
-                "schedule_is_final": application.status == LoanApplication.Status.APPROVED,
+                "schedule_is_final": application.status in (
+                    LoanApplication.Status.APPROVED, LoanApplication.Status.DISBURSED
+                ),
                 "is_owner": user.member_id == application.member_id,
                 "can_decide": open_ and user.can_approve_loans and user.member_id != application.member_id,
                 "decision_form": DecisionForm(),
+                "can_disburse": application.status == LoanApplication.Status.APPROVED
+                and user.has_financial_write_access,
+                "disbursement_form": DisbursementForm(),
             },
         )
 
@@ -381,3 +402,174 @@ class FileDownloadView(LoginRequiredMixin, View):
         response["X-Content-Type-Options"] = "nosniff"
 
         return response
+
+
+class DisburseView(ApplicationAccessMixin, View):
+    http_method_names = ["post"]
+
+    def post(self, request, pk):
+
+        application = self.get_application(pk)
+        form = DisbursementForm(request.POST)
+
+        if not form.is_valid():
+            messages.error(request, "Choose how the money was paid out.")
+            return redirect("loans:detail", pk=application.pk)
+
+        try:
+            loan = disburse_loan(
+                application,
+                request.user,
+                form.cleaned_data["payment_method"],
+                reference=form.cleaned_data["reference"],
+                disbursed_on=form.cleaned_data["disbursed_on"],
+            )
+        except LoanError as exc:
+            messages.error(request, " ".join(_error_messages(exc)))
+            return redirect("loans:detail", pk=application.pk)
+
+        messages.success(request, f"{loan.reference} disbursed. The repayment schedule has started.")
+
+        return redirect("loans:loan", pk=loan.pk)
+
+
+class LoanAccessMixin(LoginRequiredMixin):
+    def get_loan(self, pk):
+
+        loan = get_object_or_404(
+            Loan.objects.select_related("member", "application", "cycle", "disbursed_by"), pk=pk
+        )
+        user = self.request.user
+
+        if not (user.has_financial_view_access or user.member_id == loan.member_id):
+            raise PermissionDenied("You may only view your own loans.")
+
+        return loan
+
+
+class LoanDetailView(LoanAccessMixin, View):
+    def get(self, request, pk):
+
+        loan = self.get_loan(pk)
+        user = request.user
+        repayments = list(loan.repayments.select_related("recorded_by", "reversed_by"))
+        today = timezone.localdate()
+
+        return render(
+            request,
+            "loans/loan_detail.html",
+            {
+                "loan": loan,
+                "installments": loan.installments.all(),
+                "repayments": repayments,
+                "status_label": loan.display_status(),
+                "outstanding": loan.outstanding,
+                "is_owner": user.member_id == loan.member_id,
+                "can_record": user.has_financial_write_access and loan.status != Loan.Status.SETTLED,
+                "can_reverse": user.can_approve_loans,
+                "repayment_form": RepaymentForm(initial={"payment_date": today}),
+                "reversal_form": ReversalReasonForm(),
+                "preview": recovery_preview(loan) if loan.status != Loan.Status.SETTLED else None,
+                "today": today,
+            },
+        )
+
+
+class RepaymentCreateView(LoanAccessMixin, View):
+    http_method_names = ["post"]
+
+    def post(self, request, pk):
+
+        loan = self.get_loan(pk)
+        form = RepaymentForm(request.POST)
+
+        if not form.is_valid():
+            messages.error(request, "Check the repayment details: " + "; ".join(
+                f"{f}: {' '.join(e)}" for f, e in form.errors.items()
+            ))
+            return redirect("loans:loan", pk=loan.pk)
+
+        try:
+            record_repayment(
+                loan,
+                form.cleaned_data["amount"],
+                form.cleaned_data["payment_date"],
+                form.cleaned_data["payment_method"],
+                request.user,
+                reference=form.cleaned_data["reference"],
+            )
+        except LoanError as exc:
+            messages.error(request, " ".join(_error_messages(exc)))
+        else:
+            messages.success(request, "Repayment recorded.")
+
+        return redirect("loans:loan", pk=loan.pk)
+
+
+class RepaymentReverseView(LoginRequiredMixin, View):
+    http_method_names = ["post"]
+
+    def post(self, request, pk):
+
+        repayment = get_object_or_404(LoanRepayment.objects.select_related("loan"), pk=pk)
+        form = ReversalReasonForm(request.POST)
+        reason = form.cleaned_data["reason"] if form.is_valid() else ""
+
+        try:
+            reverse_repayment(repayment, request.user, reason)
+        except LoanError as exc:
+            messages.error(request, " ".join(_error_messages(exc)))
+        else:
+            messages.success(request, "Reversed. The loan balance has been restored.")
+
+        return redirect("loans:loan", pk=repayment.loan_id)
+
+
+class LoanRegisterView(LoginRequiredMixin, View):
+    """All loans, the ones past their agreed period, and the recovery controls."""
+
+    def get(self, request):
+
+        if not request.user.has_financial_view_access:
+            raise PermissionDenied("You do not have permission to view the loan register.")
+
+        today = timezone.localdate()
+        overdue = overdue_loans(today)
+
+        return render(
+            request,
+            "loans/loan_register.html",
+            {
+                "loans": Loan.objects.select_related("member", "application").prefetch_related(
+                    "installments", "repayments"
+                )[:300],
+                "overdue": [{"loan": loan, "preview": recovery_preview(loan)} for loan in overdue],
+                "recovery_enabled": recovery_enabled(),
+                "can_run": request.user.can_approve_loans,
+                "today": today,
+            },
+        )
+
+
+class RecoveryRunView(LoginRequiredMixin, View):
+    """Run the overdue-loan recovery now (the nightly job runs the same code)."""
+
+    http_method_names = ["post"]
+
+    def post(self, request):
+
+        if not request.user.can_approve_loans:
+            raise PermissionDenied("Only the Administrator or Chairperson can run loan recovery.")
+
+        try:
+            results = run_recovery(actor=request.user)
+        except LoanError as exc:
+            messages.error(request, " ".join(_error_messages(exc)))
+        else:
+            total = sum((r["recovered"] for r in results), 0)
+            messages.success(
+                request,
+                f"Checked {len(results)} overdue loan(s); recovered UGX {total:,.0f} from savings.",
+            )
+
+        return redirect("loans:register")

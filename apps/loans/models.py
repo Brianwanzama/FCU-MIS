@@ -10,8 +10,11 @@ Uploaded files are private: they are stored outside MEDIA_ROOT and are only ever
 handed out by views that check who is asking.
 """
 
+from decimal import Decimal
+
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 from .storage import get_private_storage
 
@@ -63,6 +66,7 @@ class LoanApplication(models.Model):
     class Status(models.TextChoices):
         SUBMITTED = "SUBMITTED", "Submitted"
         APPROVED = "APPROVED", "Approved"
+        DISBURSED = "DISBURSED", "Disbursed"
         REJECTED = "REJECTED", "Rejected"
         WITHDRAWN = "WITHDRAWN", "Withdrawn"
 
@@ -119,3 +123,155 @@ class LoanApplication(models.Model):
     @property
     def reference(self):
         return f"LN-{self.pk:05d}" if self.pk else "LN-new"
+
+
+
+class Loan(models.Model):
+    """
+    A loan that has been paid out. Created only by disbursing an approved
+    application, so every loan traces back to the signed forms and the decision.
+    """
+
+    class Status(models.TextChoices):
+        ACTIVE = "ACTIVE", "Active"
+        SETTLED = "SETTLED", "Settled"
+        DEFAULTED = "DEFAULTED", "Defaulted"
+
+    application = models.OneToOneField(LoanApplication, on_delete=models.PROTECT, related_name="loan")
+    member = models.ForeignKey("members.Member", on_delete=models.PROTECT, related_name="loans")
+    cycle = models.ForeignKey("cycles.Cycle", on_delete=models.PROTECT, related_name="loans")
+    principal = models.DecimalField(max_digits=12, decimal_places=2)
+    interest_rate_percent = models.DecimalField(max_digits=5, decimal_places=2)
+    period_months = models.PositiveSmallIntegerField()
+
+    disbursed_on = models.DateField()
+    disbursed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+    disbursement_method = models.CharField(max_length=20)
+    disbursement_reference = models.CharField(max_length=100, blank=True)
+
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.ACTIVE)
+    settled_on = models.DateField(null=True, blank=True)
+    defaulted_on = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-disbursed_on", "-id"]
+
+    def __str__(self):
+        return f"{self.reference} - {self.member.member_code}"
+
+    @property
+    def reference(self):
+        return self.application.reference
+
+    @property
+    def total_due(self):
+        return sum((i.amount_due for i in self.installments.all()), Decimal("0"))
+
+    @property
+    def total_paid(self):
+        return sum(
+            (r.amount for r in self.repayments.all() if r.reversed_at is None), Decimal("0")
+        )
+
+    @property
+    def outstanding(self):
+        return max(self.total_due - self.total_paid, Decimal("0"))
+
+    @property
+    def final_due_date(self):
+        last = self.installments.order_by("-number").first()
+        return last.due_date if last else None
+
+    def has_overdue_installment(self, today=None):
+        today = today or timezone.localdate()
+        return any(i.due_date < today and i.remaining > 0 for i in self.installments.all())
+
+    def display_status(self, today=None):
+        """Current, Overdue, Defaulted or Settled: what a person should be told."""
+
+        if self.status == self.Status.SETTLED:
+            return "Settled"
+        if self.status == self.Status.DEFAULTED:
+            return "Defaulted"
+        return "Overdue" if self.has_overdue_installment(today) else "Current"
+
+
+class LoanInstallment(models.Model):
+    loan = models.ForeignKey(Loan, on_delete=models.PROTECT, related_name="installments")
+    number = models.PositiveSmallIntegerField()
+    due_date = models.DateField()
+    principal_due = models.DecimalField(max_digits=12, decimal_places=2)
+    interest_due = models.DecimalField(max_digits=12, decimal_places=2)
+    amount_due = models.DecimalField(max_digits=12, decimal_places=2)
+    amount_paid = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
+
+    class Meta:
+        ordering = ["number"]
+        constraints = [
+            models.UniqueConstraint(fields=["loan", "number"], name="one_installment_per_number"),
+        ]
+
+    @property
+    def remaining(self):
+        return max(self.amount_due - self.amount_paid, Decimal("0"))
+
+
+class LoanRepayment(models.Model):
+    """
+    Money that reduces a loan: a payment received, or a recovery from the
+    member's savings. A recovery is a separate transaction linked to the loan;
+    it never edits or removes the contributions it is taken from, so statements
+    show both the original deposits and the offset.
+    """
+
+    class Kind(models.TextChoices):
+        PAYMENT = "PAYMENT", "Repayment"
+        SAVINGS_OFFSET = "SAVINGS_OFFSET", "Recovered from savings"
+
+    class Method(models.TextChoices):
+        CASH = "CASH", "Cash"
+        BANK = "BANK", "Bank Transfer"
+        MOBILE_MONEY = "MOBILE_MONEY", "Mobile Money"
+
+    loan = models.ForeignKey(Loan, on_delete=models.PROTECT, related_name="repayments")
+    kind = models.CharField(max_length=20, choices=Kind.choices, default=Kind.PAYMENT)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    payment_date = models.DateField()
+    payment_method = models.CharField(max_length=20, choices=Method.choices, blank=True)
+    reference = models.CharField(max_length=100, blank=True)
+    cycle = models.ForeignKey(
+        "cycles.Cycle", on_delete=models.PROTECT, related_name="loan_repayments",
+        help_text="The cycle in which this was recorded. A savings offset counts against this cycle's contribution position.",
+    )
+    recorded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="+",
+        help_text="Empty for automatic recoveries run by the system.",
+    )
+    recovery_date = models.DateField(
+        null=True, blank=True,
+        help_text="For recoveries: the day it ran. At most one live recovery per loan per day.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    reversed_at = models.DateTimeField(null=True, blank=True)
+    reversed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
+    )
+    reversal_reason = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["payment_date", "id"]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(amount__gt=0), name="loan_repayment_positive"),
+            models.UniqueConstraint(
+                fields=["loan", "recovery_date"],
+                condition=models.Q(kind="SAVINGS_OFFSET", reversed_at__isnull=True),
+                name="one_live_recovery_per_loan_per_day",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.loan.reference} {self.get_kind_display()} {self.amount}"

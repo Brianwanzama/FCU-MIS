@@ -235,6 +235,16 @@ PRIVATE_MEDIA_ROOT = env.path("FCU_PRIVATE_MEDIA_ROOT", default=str(BASE_DIR / "
 
 FCU_UPLOAD_MAX_MB = env.int("FCU_UPLOAD_MAX_MB", default=5)
 
+# Automatic recovery of defaulted loans from a member's savings (Manual 4.6) runs
+# only when this is switched on, i.e. once FCU confirms the recovery policy. Until
+# then the nightly job only reports what it WOULD recover. Record the authority
+# (e.g. the General Meeting resolution) in the reference, which is written to the
+# audit log with every recovery.
+FCU_LOAN_AUTO_RECOVERY_ENABLED = env.bool("FCU_LOAN_AUTO_RECOVERY_ENABLED", default=False)
+FCU_LOAN_RECOVERY_POLICY_REF = env.str(
+    "FCU_LOAN_RECOVERY_POLICY_REF", default="FCU Manual v3.0, section 4.6"
+)
+
 # ---------------------------------------------------------------------
 # Email
 # ---------------------------------------------------------------------

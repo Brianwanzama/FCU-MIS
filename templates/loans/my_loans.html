@@ -65,6 +65,28 @@
       </div>
     </div>
 
+    {% if loans %}
+    <div class="card fcu-card mb-4">
+      <div class="card-header">My loans</div>
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <thead><tr><th>Loan</th><th>Disbursed</th><th class="text-end">Borrowed</th><th class="text-end">Outstanding</th><th>Status</th></tr></thead>
+          <tbody>
+          {% for loan in loans %}
+            <tr>
+              <td><a href="{% url 'loans:loan' loan.pk %}">{{ loan.reference }}</a></td>
+              <td>{{ loan.disbursed_on|date:"d M Y" }}</td>
+              <td class="text-end">{{ loan.principal|ugx }}</td>
+              <td class="text-end">{{ loan.outstanding|ugx }}</td>
+              <td>{% include "loans/_loan_status.html" with label=loan.display_status %}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
     <div class="card fcu-card">
       <div class="card-header">My applications</div>
       <div class="table-responsive">
@@ -81,6 +103,7 @@
                 {% if a.status == "APPROVED" %}<span class="badge text-bg-success">Approved</span>
                 {% elif a.status == "REJECTED" %}<span class="badge text-bg-danger">Rejected</span>
                 {% elif a.status == "WITHDRAWN" %}<span class="badge text-bg-secondary">Withdrawn</span>
+                {% elif a.status == "DISBURSED" %}<span class="badge text-bg-primary">Paid out</span>
                 {% else %}<span class="badge text-bg-warning">Awaiting decision</span>{% endif %}
               </td>
             </tr>

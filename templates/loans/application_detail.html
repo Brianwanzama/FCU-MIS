@@ -25,11 +25,18 @@
     {% if application.status == "APPROVED" %}<span class="badge text-bg-success fs-6">Approved</span>
     {% elif application.status == "REJECTED" %}<span class="badge text-bg-danger fs-6">Rejected</span>
     {% elif application.status == "WITHDRAWN" %}<span class="badge text-bg-secondary fs-6">Withdrawn</span>
+    {% elif application.status == "DISBURSED" %}<span class="badge text-bg-primary fs-6">Paid out</span>
     {% else %}<span class="badge text-bg-warning fs-6">Awaiting decision</span>{% endif %}
   </div>
 </div>
 
-{% if application.status == "APPROVED" %}
+{% if application.status == "DISBURSED" %}
+  <div class="alert alert-primary">
+    This loan has been paid out. <a href="{% url 'loans:loan' application.loan.pk %}">Open the loan and its repayment schedule.</a>
+  </div>
+{% endif %}
+
+{% if application.status == "APPROVED" or application.status == "DISBURSED" %}
   <div class="alert alert-success">
     Approved on {{ application.decided_at|date:"d M Y" }}. Interest {{ application.interest_rate_percent|floatformat:"-2" }}% a month on the
     outstanding balance; {{ application.installment_amount|ugx }} a month. Repayments are fixed and cannot be extended (Manual 4.5(c)).
@@ -85,6 +92,26 @@
         {% with result=checks %}{% include "loans/_checks.html" %}{% endwith %}
         <div class="card-body border-top small">
           Limit: {{ checks.limit|ugx }} ({{ checks.percent|floatformat:"-1" }}% of {{ checks.pool|ugx }} deposits).
+        </div>
+      </div>
+    {% endif %}
+
+    {% if can_disburse %}
+      <div class="card fcu-card mb-4">
+        <div class="card-header">Pay out the loan</div>
+        <div class="card-body">
+          <form method="post" action="{% url 'loans:disburse' application.pk %}">
+            {% csrf_token %}
+            {% for field in disbursement_form %}
+              <div class="mb-2">
+                <label class="form-label small mb-1" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+              </div>
+            {% endfor %}
+            <button class="btn btn-fcu-gold mt-2" type="submit">Record disbursement</button>
+          </form>
+          <div class="form-text mt-2">The schedule starts from the date paid out and must finish inside the running cycle.</div>
         </div>
       </div>
     {% endif %}

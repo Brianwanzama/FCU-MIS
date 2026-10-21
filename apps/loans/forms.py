@@ -88,3 +88,44 @@ class ReviewForm(forms.Form, _Styled):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.style()
+
+
+class DisbursementForm(forms.Form, _Styled):
+    payment_method = forms.ChoiceField(
+        label="Paid out by",
+        choices=[("CASH", "Cash"), ("BANK", "Bank Transfer"), ("MOBILE_MONEY", "Mobile Money")],
+    )
+    reference = forms.CharField(
+        required=False, max_length=100, label="Reference",
+        help_text="Mobile-money ID, bank slip or receipt number.",
+    )
+    disbursed_on = forms.DateField(
+        required=False, label="Date paid out", widget=forms.DateInput(attrs={"type": "date"}),
+        help_text="Leave blank for today. Interest and the schedule run from this date.",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.style()
+
+
+class RepaymentForm(forms.Form, _Styled):
+    amount = forms.DecimalField(min_value=1, max_digits=12, decimal_places=0, label="Amount (UGX)")
+    payment_date = forms.DateField(label="Date paid", widget=forms.DateInput(attrs={"type": "date"}))
+    payment_method = forms.ChoiceField(
+        label="Method",
+        choices=[("CASH", "Cash"), ("BANK", "Bank Transfer"), ("MOBILE_MONEY", "Mobile Money")],
+    )
+    reference = forms.CharField(required=False, max_length=100, label="Reference")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.style()
+
+
+class ReversalReasonForm(forms.Form, _Styled):
+    reason = forms.CharField(widget=forms.Textarea(attrs={"rows": 2}), label="Reason")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.style()

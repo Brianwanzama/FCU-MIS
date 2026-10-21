@@ -170,7 +170,37 @@ Settings: `FCU_LOAN_LIMIT_PERCENT` (default 120), `FCU_DEFAULT_LOAN_INTEREST_PER
 (5, per month), `FCU_UPLOAD_MAX_MB` (5). The old `FCU_DEFAULT_MAX_LOAN_*` settings are gone.
 Run `python manage.py migrate`: adds `loans.0001` and `contributions.0004`.
 
-Not built yet: disbursement, recording repayments, and automatic recovery.
+### Disbursement, repayments and recovery
+
+- **Disbursement:** the Treasurer or Administrator records the payout of an approved
+  application (method, reference, date). That creates the loan and fixes the schedule
+  from the payout date (5% a month on the outstanding balance, equal monthly
+  instalments); it must still finish inside the running cycle. A member cannot borrow
+  again while a loan is unpaid, and the loan limit is reduced by what is owed.
+- **Repayments:** the Treasurer or Administrator records them; they clear the oldest
+  instalment first. Overpaying is refused. Reversing a repayment (or a recovery) needs
+  the Administrator or Chairperson, never the person who recorded it, with a reason;
+  the record stays, marked reversed, and the balance is restored.
+- **Statuses:** Current, Overdue (an instalment is late), Defaulted (the agreed period
+  ended with money owed, Manual 4.7) and Settled. Pages: `/loans/loan/<id>/`,
+  `/loans/register/`; members see their own loans on `/loans/`.
+- **Automatic recovery (Manual 4.6):** when a loan's agreed period has ended with money
+  still owed, FCU recovers principal + interest from the member's **deposits across all
+  cycles; emergency contributions are never touched**. If savings fall short, the rest
+  stays outstanding and later deposits are recovered on later days. The recovery is a
+  separate "savings offset" transaction linked to the loan: the original contributions
+  are not edited, and statements show both. Each recovery is audited with amounts before
+  and after and the policy reference. It cannot run twice in a day (locked, and enforced
+  by the database).
+- **Effect on status (4.6(d)):** if the recovery leaves the member below the deposits
+  required for the cycle to date, they become Inactive ("Loan recovered from
+  contributions") until they pay back up, then Active again automatically.
+- **Scheduled job:** run `python manage.py recover_overdue_loans` daily (Railway cron or
+  similar). It needs nobody logged in. It is **off until FCU approves the policy**: set
+  `FCU_LOAN_AUTO_RECOVERY_ENABLED=True` (and `FCU_LOAN_RECOVERY_POLICY_REF`, e.g. the
+  General Meeting resolution). Until then the command only prints a dry run of what it
+  would recover. `--dry-run` is always available.
+- Run `python manage.py migrate`: adds `loans.0002` and `members.0005`.
 
 ## Next phase
 

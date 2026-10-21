@@ -57,6 +57,7 @@ def record_contribution(contribution, actor=None):
     )
 
     _reassess_arrears(contribution.member, contribution.settles_cycle, actor)
+    _reassess_recovery(contribution.member, actor)
 
     return contribution
 
@@ -96,6 +97,7 @@ def update_contribution(contribution, old_snapshot, actor=None, reason=""):
     )
 
     _reassess_arrears(contribution.member, contribution.settles_cycle, actor)
+    _reassess_recovery(contribution.member, actor)
 
     return contribution
 
@@ -183,6 +185,7 @@ def approve_reversal(reversal, actor, note=""):
     )
 
     _reassess_arrears(contribution.member, contribution.settles_cycle, actor)
+    _reassess_recovery(contribution.member, actor)
 
     return reversal
 
@@ -249,10 +252,15 @@ def member_contribution_summary(member, cycle):
     monthly_due = cycle.member_deposit_target
     emergency_due = cycle.member_emergency_target
 
+    # Savings recovered to repay a loan during this cycle reduce the member's
+    # contribution position for it (Manual 4.6(d)); the deposits themselves stay.
+    monthly_offsets = _savings_offsets(member, cycle)
+
     return {
         "monthly_due": monthly_due,
         "monthly_paid": monthly_paid,
-        "monthly_balance": monthly_due - monthly_paid,
+        "monthly_offsets": monthly_offsets,
+        "monthly_balance": monthly_due - (monthly_paid - monthly_offsets),
 
         "emergency_due": emergency_due,
         "emergency_paid": emergency_paid,
@@ -263,7 +271,7 @@ def member_contribution_summary(member, cycle):
         "overall_balance":
             (monthly_due + emergency_due)
             -
-            (monthly_paid + emergency_paid),
+            ((monthly_paid - monthly_offsets) + emergency_paid),
     }
 
 # ============================================================
@@ -288,6 +296,7 @@ def member_balance(member, cycle):
     return {
         "monthly_due": summary["monthly_due"],
         "monthly_paid": summary["monthly_paid"],
+        "monthly_offsets": summary["monthly_offsets"],
         "monthly_balance": summary["monthly_balance"],
 
         "emergency_due": summary["emergency_due"],
@@ -377,6 +386,28 @@ def cycle_contribution_summary(cycle):
 # HELPERS
 # ============================================================
 
+def _savings_offsets(member, cycle):
+    from apps.loans.models import LoanRepayment
+
+    return (
+        LoanRepayment.objects.filter(
+            loan__member=member,
+            cycle=cycle,
+            kind=LoanRepayment.Kind.SAVINGS_OFFSET,
+            reversed_at__isnull=True,
+        ).aggregate(total=Sum("amount"))["total"]
+        or Decimal("0")
+    )
+
+
+def _reassess_recovery(member, actor):
+    """Paying up can lift the Inactive status a loan recovery caused (Manual 4.6(d))."""
+
+    from apps.members.services import reassess_after_loan_recovery
+
+    reassess_after_loan_recovery(member, actor=actor)
+
+
 def _require(actor, permission, action):
     if actor is None or not getattr(actor, permission, False):
         raise PermissionDenied(f"You do not have permission to {action}.")
@@ -436,7 +467,9 @@ def contribution_arrears_to_date(member, cycle, today=None):
     return {
         "months_overdue": months_overdue,
         "deposits_required": deposits_required,
-        "deposit_arrears": max(deposits_required - summary["monthly_paid"], Decimal("0")),
+        "deposit_arrears": max(
+            deposits_required - (summary["monthly_paid"] - summary["monthly_offsets"]), Decimal("0")
+        ),
         "emergency_required": emergency_required,
         "emergency_arrears": max(emergency_required - summary["emergency_paid"], Decimal("0")),
     }

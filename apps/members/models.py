@@ -21,6 +21,10 @@ class Member(models.Model):
             "CONTRIBUTION_ARREARS",
             "Contribution Arrears",
         )
+        LOAN_RECOVERY = (
+            "LOAN_RECOVERY",
+            "Loan recovered from contributions",
+        )
 
     member_code = models.CharField(
         max_length=10,

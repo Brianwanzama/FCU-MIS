@@ -1,0 +1,4 @@
+{% if label == "Settled" %}<span class="badge text-bg-success">Settled</span>
+{% elif label == "Defaulted" %}<span class="badge text-bg-danger">Defaulted</span>
+{% elif label == "Overdue" %}<span class="badge text-bg-warning">Overdue</span>
+{% else %}<span class="badge text-bg-primary">Current</span>{% endif %}

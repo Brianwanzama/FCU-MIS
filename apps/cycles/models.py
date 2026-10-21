@@ -523,8 +523,17 @@ class Cycle(models.Model):
                 f"Emergency contributions outstanding: "
                 f"UGX {totals['emergency_outstanding']:,.0f}."
             )
-        # Phase 5+ will extend this with: outstanding loans (Manual 4.5(d)),
-        # unreconciled ledger entries.
+        owed_loans = [
+            loan for loan in self.loans.exclude(status="SETTLED") if loan.outstanding > 0
+        ]
+        if owed_loans:
+            total = sum(loan.outstanding for loan in owed_loans)
+            issues.append(
+                f"{len(owed_loans)} loan(s) from this cycle are not settled "
+                f"(UGX {total:,.0f} outstanding). Manual 4.5(d) expects every loan to "
+                f"be repaid within the cycle; overdue ones are subject to recovery."
+            )
+        # Later phases will extend this with: unreconciled ledger entries.
         return issues
 
 

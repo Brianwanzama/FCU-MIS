@@ -5,6 +5,7 @@
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
   <h1 class="mb-0">Loan applications</h1>
   <div class="d-flex gap-2">
+    <a href="{% url 'loans:register' %}" class="btn btn-outline-secondary">Loan register</a>
     {% if user.can_verify_undertakings %}
       <a href="{% url 'loans:undertakings' %}" class="btn btn-outline-secondary">
         Signed declarations{% if pending_undertakings %} <span class="badge text-bg-warning">{{ pending_undertakings }}</span>{% endif %}
@@ -39,6 +40,7 @@
             {% if a.status == "APPROVED" %}<span class="badge text-bg-success">Approved</span>
             {% elif a.status == "REJECTED" %}<span class="badge text-bg-danger">Rejected</span>
             {% elif a.status == "WITHDRAWN" %}<span class="badge text-bg-secondary">Withdrawn</span>
+            {% elif a.status == "DISBURSED" %}<span class="badge text-bg-primary">Paid out</span>
             {% else %}<span class="badge text-bg-warning">Awaiting decision</span>{% endif %}
           </td>
         </tr>
