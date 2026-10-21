@@ -28,3 +28,11 @@ class ContributionForm(forms.ModelForm):
             "payment_date": forms.DateInput(attrs={"type": "date"}),
             "remarks": forms.Textarea(attrs={"rows": 3}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        for field in self.fields.values():
+            widget = field.widget
+            css = "form-select" if isinstance(widget, forms.Select) else "form-control"
+            widget.attrs["class"] = f"{widget.attrs.get('class', '')} {css}".strip()

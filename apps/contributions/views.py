@@ -24,15 +24,8 @@ class FinancialAccessMixin(LoginRequiredMixin):
 
     def dispatch(self, request, *args, **kwargs):
 
-        # ---------- TEMPORARY DEBUG ----------
-        print("=" * 60)
-        print("Logged in user :", request.user.username)
-        print("Role           :", request.user.role)
-        print("Authenticated  :", request.user.is_authenticated)
-        print("Has Full Access:", request.user.has_full_access)
-        print("Financial Write:", request.user.has_financial_write_access)
-        print("=" * 60)
-        # ------------------------------------
+        if not request.user.is_authenticated:
+            return self.handle_no_permission()
 
         if request.user.role not in (
             User.Role.ADMINISTRATOR,
