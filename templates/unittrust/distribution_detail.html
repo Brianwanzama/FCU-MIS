@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}{{ distribution.description }}{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb small">
+  <li class="breadcrumb-item"><a href="{% url 'unittrust:distributions' %}">Profit distributions</a></li>
+  <li class="breadcrumb-item active">{{ distribution.description }}</li></ol></nav>
+
+<div class="d-flex justify-content-between flex-wrap gap-2 mb-3">
+  <div><h1 class="mb-1">{{ distribution.total_amount|ugx }}</h1>
+    <div class="text-muted">{{ distribution.description }} &middot; {{ distribution.cycle }}</div></div>
+  <div class="fs-5">{{ distribution.get_status_display }}</div>
+</div>
+
+{% if distribution.resolution_reference %}<div class="alert alert-light border">Approved by {{ distribution.approved_by }} on {{ distribution.approved_at|date:"d M Y" }} &middot; Resolution: <strong>{{ distribution.resolution_reference }}</strong></div>{% endif %}
+{% if distribution.paid_on %}<div class="alert alert-success">Paid on {{ distribution.paid_on|date:"d M Y" }}.</div>{% endif %}
+{% if distribution.status == "CANCELLED" %}<div class="alert alert-secondary">Cancelled: {{ distribution.cancel_reason }}</div>{% endif %}
+{% if distribution.status == "DRAFT" %}<div class="alert alert-warning">Draft. The shares are worked out again, and then fixed, when it is approved.</div>{% endif %}
+
+<div class="d-flex gap-3 flex-wrap mb-3">
+  {% if can_approve %}
+    <form method="post" class="d-flex gap-2" action="{% url 'unittrust:distribution_action' distribution.pk 'approve' %}">{% csrf_token %}
+      <input type="text" name="resolution_reference" class="form-control" placeholder="General Meeting resolution reference" required>
+      <button class="btn btn-success" type="submit">Approve</button></form>
+  {% elif distribution.status == "DRAFT" and user.has_chairperson_access %}
+    <span class="small text-muted align-self-center">You drafted this, so someone else must approve it.</span>
+  {% endif %}
+  {% if can_pay %}
+    <form method="post" action="{% url 'unittrust:distribution_action' distribution.pk 'pay' %}">{% csrf_token %}<button class="btn btn-fcu-gold" type="submit">Mark as paid</button></form>
+  {% endif %}
+  {% if can_cancel %}
+    <form method="post" class="d-flex gap-2" action="{% url 'unittrust:distribution_action' distribution.pk 'cancel' %}">{% csrf_token %}
+      <input type="text" name="reason" class="form-control" placeholder="Reason" required><button class="btn btn-outline-danger" type="submit">Cancel</button></form>
+  {% endif %}
+</div>
+
+<div class="card fcu-card"><div class="table-responsive"><table class="table table-sm align-middle mb-0">
+  <thead><tr><th>Member</th><th class="text-end">Accumulated deposits</th><th class="text-end">Share</th><th class="text-end">Amount</th><th>Note</th></tr></thead><tbody>
+  {% for l in lines %}
+    <tr {% if not l.eligible %}class="text-muted"{% endif %}>
+      <td>{{ l.member.member_code }} &middot; {{ l.member.full_name }}</td>
+      <td class="text-end">{{ l.contribution_base|ugx }}</td>
+      <td class="text-end">{% if l.eligible %}{{ l.share_percent }}%{% endif %}</td>
+      <td class="text-end fw-semibold">{{ l.amount|ugx }}</td>
+      <td class="small">{% if l.eligible %}Eligible{% else %}{{ l.reason }}{% endif %}</td></tr>
+  {% endfor %}
+</tbody></table></div></div>
+{% endblock %}

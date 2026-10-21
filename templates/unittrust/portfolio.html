@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Investments{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-4">
+  <div>
+    <h1 class="mb-1">FCU investments</h1>
+    <p class="text-muted mb-0">Held in FCU's name for all members (Manual 7.2).</p>
+  </div>
+  <div class="d-flex gap-2">
+    {% if user.has_financial_view_access %}<a href="{% url 'unittrust:distributions' %}" class="btn btn-outline-secondary">Profit distributions</a>{% endif %}
+    {% if user.has_financial_write_access %}<a href="{% url 'unittrust:create' %}" class="btn btn-fcu-gold">+ New investment</a>{% endif %}
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-3"><div class="card fcu-card"><div class="card-body"><small class="text-muted text-uppercase">Invested</small><h3 class="mt-1 mb-0">{{ book.invested|ugx }}</h3></div></div></div>
+  <div class="col-md-3"><div class="card fcu-card"><div class="card-body"><small class="text-muted text-uppercase">Worth now</small><h3 class="mt-1 mb-0">{{ book.market_value|ugx }}</h3></div></div></div>
+  <div class="col-md-3"><div class="card fcu-card"><div class="card-body"><small class="text-muted text-uppercase">Earnings received</small><h3 class="mt-1 mb-0">{{ book.income|ugx }}</h3></div></div></div>
+  <div class="col-md-3"><div class="card fcu-card"><div class="card-body"><small class="text-muted text-uppercase">Total return</small><h3 class="mt-1 mb-0">{{ book.total_return|ugx }}</h3></div></div></div>
+</div>
+
+{% if mine %}
+<div class="card fcu-card mb-4 border-primary">
+  <div class="card-header">My share</div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-3"><small class="text-muted">My share of the pool</small><div class="fs-5 fw-semibold">{{ mine.share_percent }}%</div></div>
+      <div class="col-md-3"><small class="text-muted">My share of the investments</small><div class="fs-5 fw-semibold">{{ mine.portfolio_share|ugx }}</div></div>
+      <div class="col-md-3"><small class="text-muted">Of which unit trust</small><div class="fs-5 fw-semibold">{{ mine.unit_trust|ugx }}</div></div>
+      <div class="col-md-3"><small class="text-muted">Bonuses received</small><div class="fs-5 fw-semibold">{{ mine.distributions_paid|ugx }}</div></div>
+    </div>
+    <p class="small text-muted mt-3 mb-0">
+      Indicative: your accumulated deposits as a share of all members' deposits, applied to what the investments are worth.
+      Profit shared as bonuses goes to Active members in Good Standing in proportion to their contributions (Manual 8.2, 8.3).
+    </p>
+    {% if mine.lines %}
+      <table class="table table-sm mt-3 mb-0">
+        <thead><tr><th>Bonus</th><th>Status</th><th class="text-end">My amount</th></tr></thead>
+        <tbody>
+        {% for line in mine.lines %}
+          <tr><td>{{ line.distribution.description }}</td><td>{{ line.distribution.get_status_display }}{% if line.distribution.paid_on %} {{ line.distribution.paid_on|date:"d M Y" }}{% endif %}</td><td class="text-end">{{ line.amount|ugx }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<div class="card fcu-card">
+  <div class="table-responsive">
+    <table class="table align-middle mb-0">
+      <thead><tr><th>Investment</th><th>Type</th><th class="text-end">Invested</th><th class="text-end">Worth now</th><th class="text-end">Earnings</th><th class="text-end">Return</th></tr></thead>
+      <tbody>
+      {% for p in book.positions %}
+        <tr>
+          <td><a href="{% url 'unittrust:detail' p.investment.pk %}">{{ p.investment.name }}</a>
+            {% if p.investment.status == "CLOSED" %}<span class="badge text-bg-secondary">Closed</span>{% endif %}
+            <div class="small text-muted">{{ p.investment.provider }}</div></td>
+          <td>{{ p.investment.get_kind_display }}</td>
+          <td class="text-end">{{ p.invested|ugx }}</td>
+          <td class="text-end">{{ p.market_value|ugx }}</td>
+          <td class="text-end">{{ p.income|ugx }}</td>
+          <td class="text-end">{{ p.total_return|ugx }} <span class="small text-muted">({{ p.return_percent }}%)</span></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6" class="text-center text-muted py-5">No investments have been recorded yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

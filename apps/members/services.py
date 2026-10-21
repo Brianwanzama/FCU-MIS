@@ -187,20 +187,21 @@ def member_financial_summary(member, cycle):
 
     loan = member_loan_summary(member)
 
-    # Placeholder until the Investments module is built.
-    investment = {
-        "unit_trust": Decimal("0"),
-    }
+    from apps.unittrust.services import member_investment_summary as investment_summary
+
+    investment = investment_summary(member)
 
     # Deposits and emergency contributions are separate funds. Only deposits
     # count as the member's savings; the emergency fund is reported on its own.
     total_deposits = contribution["monthly_paid"]
     total_emergency = contribution["emergency_paid"]
 
+    # Deposits plus bonuses received, less what is owed. A share of FCU's
+    # investments is NOT added: it is funded by these same deposits.
     net_position = (
         total_deposits
         +
-        investment["unit_trust"]
+        investment["distributions_paid"]
         -
         loan["balance"]
     )
@@ -265,14 +266,11 @@ def member_loan_summary(member):
 
 
 def member_investment_summary(member):
-    """
-    Returns the member's investment position.
+    """The member's share of FCU's investments and their bonuses."""
 
-    Placeholder until the Investments module is built.
-    """
-    return {
-        "unit_trust": Decimal("0"),
-    }
+    from apps.unittrust.services import member_investment_summary as summary
+
+    return summary(member)
 
 # ============================================================
 # MEMBER STATEMENT

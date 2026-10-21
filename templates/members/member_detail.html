@@ -571,11 +571,23 @@
 
                         <tr>
 
-                            <th>Investments</th>
+                            <th>Share of unit trust (indicative)</th>
 
                             <td class="text-end">
 
                                 {{ summary.investment.unit_trust|ugx }}
+
+                            </td>
+
+                        </tr>
+
+                        <tr>
+
+                            <th>Bonuses received</th>
+
+                            <td class="text-end">
+
+                                {{ summary.investment.distributions_paid|ugx }}
 
                             </td>
 
@@ -912,8 +924,9 @@
 
                     <p class="text-muted">
 
-                        Unit Trust investments, interest earned and dividends
-                        will appear here.
+                        Your indicative share of FCU's unit trust.
+                        Bonuses received: {{ summary.investment.distributions_paid|ugx }}.
+                        <a href="{% url 'unittrust:portfolio' %}">See all investments</a>.
 
                     </p>
 

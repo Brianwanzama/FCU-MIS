@@ -202,6 +202,28 @@ Run `python manage.py migrate`: adds `loans.0001` and `contributions.0004`.
   would recover. `--dry-run` is always available.
 - Run `python manage.py migrate`: adds `loans.0002` and `members.0005`.
 
+## Investments and profit distribution (Manual v3.0, sections 7 and 8)
+
+- **Investments** (`/investments/`, "Investments" in the menu): unit trusts, microfinance
+  ventures and real estate, registered in FCU's name. The Treasurer or Administrator
+  records money invested, money returned, earnings received, fees and market value
+  updates. Reversing a transaction needs the Administrator or Chairperson (not the
+  recorder) and a reason; records are never deleted.
+- **Position** per investment: invested, worth now (latest valuation, or what is still
+  in it), earnings, and total return. **Every member** sees the portfolio totals and
+  their own indicative share (their accumulated deposits as a share of all members'
+  deposits, applied to the portfolio's value); only officers see the transactions.
+- **Profit distribution (bonus):** the Treasurer drafts a distribution; the Chairperson or
+  Administrator (not the drafter) approves it with the **General Meeting resolution
+  reference**; the Treasurer marks it paid. Shares are in proportion to each member's
+  accumulated deposits (after loan recoveries) and go only to **Active members in Good
+  Standing** (no overdue contributions, no overdue or defaulted loan); Inactive and
+  Withdrawn members get nothing and their share is spread over the eligible members.
+  Whole shillings, adding up exactly. Shares are recalculated at approval and then fixed.
+- Member dashboard: net position = deposits + bonuses received - loan balance. A share
+  of the investments is shown for information but not added (it is funded by the deposits).
+- Run `python manage.py migrate`: adds `unittrust.0001`.
+
 ## Next phase
 
 The SRS was revised to v1.1 (General Ledger, Financial Position, Cycle Locking,

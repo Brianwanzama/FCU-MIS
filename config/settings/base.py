@@ -68,7 +68,7 @@ LOCAL_APPS = [
     # Future modules (not yet implemented)
     "apps.loans",
     # "apps.repayments",
-    # "apps.unittrust",
+    "apps.unittrust",
     # "apps.emergencyfund",
     # "apps.expenses",
     # "apps.orgsettings",
