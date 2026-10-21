@@ -126,28 +126,33 @@
       <div class="card-body">
         <dl class="row mb-0">
           <dt class="col-7">Monthly savings</dt>
-          <dd class="col-5 text-end">UGX {{ cycle.monthly_savings_amount|floatformat:0|intcomma }}</dd>
+          <dd class="col-5 text-end">{{ cycle.monthly_savings_amount|ugx }}</dd>
 
           <dt class="col-7">Monthly emergency</dt>
-          <dd class="col-5 text-end">UGX {{ cycle.monthly_emergency_amount|floatformat:0|intcomma }}</dd>
+          <dd class="col-5 text-end">{{ cycle.monthly_emergency_amount|ugx }}</dd>
 
           <dt class="col-7">Months</dt>
           <dd class="col-5 text-end">&times; {{ cycle.duration_months }}</dd>
         </dl>
         <hr>
         <dl class="row mb-0">
-          <dt class="col-7 fcu-display">Target per member</dt>
-          <dd class="col-5 text-end fw-bold">
-            UGX {{ cycle.per_member_target|floatformat:0|intcomma }}
-          </dd>
+          <dt class="col-7 fcu-display">Deposit target per member</dt>
+          <dd class="col-5 text-end fw-bold">{{ cycle.member_deposit_target|ugx }}</dd>
 
-          <dt class="col-7">Unit-wide target</dt>
-          <dd class="col-5 text-end">UGX {{ cycle.unit_target|floatformat:0|intcomma }}</dd>
+          <dt class="col-7">Emergency obligation per member</dt>
+          <dd class="col-5 text-end">{{ cycle.member_emergency_target|ugx }}</dd>
+
+          <dt class="col-7 fcu-display">Unit deposit target</dt>
+          <dd class="col-5 text-end fw-bold">{{ cycle.unit_deposit_target|ugx }}</dd>
+
+          <dt class="col-7">Unit emergency obligation</dt>
+          <dd class="col-5 text-end">{{ cycle.unit_emergency_target|ugx }}</dd>
         </dl>
         <p class="text-muted small mb-0 mt-3">
-          The unit-wide figure is the per-member target multiplied by the number of
-          currently Active members. It is calculated on the fly, not stored, because
-          membership changes during a cycle.
+          Unit-wide figures are the per-member targets multiplied by the number of
+          currently Active members ({{ cycle.eligible_member_count }}). Deposits and
+          emergency contributions are always reported separately. They are calculated on
+          the fly, not stored, because membership changes during a cycle.
         </p>
       </div>
     </div>

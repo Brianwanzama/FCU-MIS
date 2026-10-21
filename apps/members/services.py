@@ -106,11 +106,10 @@ def member_financial_summary(member, cycle):
         "unit_trust": Decimal("0"),
     }
 
-    total_deposits = (
-        contribution["monthly_paid"]
-        +
-        contribution["emergency_paid"]
-    )
+    # Deposits and emergency contributions are separate funds. Only deposits
+    # count as the member's savings; the emergency fund is reported on its own.
+    total_deposits = contribution["monthly_paid"]
+    total_emergency = contribution["emergency_paid"]
 
     net_position = (
         total_deposits
@@ -127,6 +126,7 @@ def member_financial_summary(member, cycle):
         "loan": loan,
         "investment": investment,
         "total_deposits": total_deposits,
+        "total_emergency": total_emergency,
         "net_position": net_position,
     }
 

@@ -116,7 +116,7 @@
 
                     <h3 class="mt-2">
 
-                        UGX {{ summary.contributions.overall_due }}
+                        {{ summary.contributions.overall_due|ugx }}
 
                     </h3>
 
@@ -140,7 +140,7 @@
 
                     <h3 class="mt-2 text-success">
 
-                        UGX {{ summary.contributions.overall_paid }}
+                        {{ summary.contributions.overall_paid|ugx }}
 
                     </h3>
 
@@ -164,7 +164,7 @@
 
                     <h3 class="mt-2 text-danger">
 
-                        UGX {{ summary.contributions.overall_balance }}
+                        {{ summary.contributions.overall_balance|ugx }}
 
                     </h3>
 
@@ -188,7 +188,7 @@
 
                     <h3 class="mt-2 text-primary">
 
-                        UGX {{ summary.total_deposits }}
+                        {{ summary.total_deposits|ugx }}
 
                     </h3>
 
@@ -384,19 +384,19 @@
 
                                 <td class="text-end">
 
-                                    UGX {{ summary.contributions.monthly_due }}
+                                    {{ summary.contributions.monthly_due|ugx }}
 
                                 </td>
 
                                 <td class="text-end text-success">
 
-                                    UGX {{ summary.contributions.monthly_paid }}
+                                    {{ summary.contributions.monthly_paid|ugx }}
 
                                 </td>
 
                                 <td class="text-end">
 
-                                    UGX {{ summary.contributions.monthly_balance }}
+                                    {{ summary.contributions.monthly_balance|ugx }}
 
                                 </td>
 
@@ -412,19 +412,19 @@
 
                                 <td class="text-end">
 
-                                    UGX {{ summary.contributions.emergency_due }}
+                                    {{ summary.contributions.emergency_due|ugx }}
 
                                 </td>
 
                                 <td class="text-end text-success">
 
-                                    UGX {{ summary.contributions.emergency_paid }}
+                                    {{ summary.contributions.emergency_paid|ugx }}
 
                                 </td>
 
                                 <td class="text-end">
 
-                                    UGX {{ summary.contributions.emergency_balance }}
+                                    {{ summary.contributions.emergency_balance|ugx }}
 
                                 </td>
 
@@ -440,19 +440,19 @@
 
                                 <td class="text-end">
 
-                                    UGX {{ summary.contributions.overall_due }}
+                                    {{ summary.contributions.overall_due|ugx }}
 
                                 </td>
 
                                 <td class="text-end text-success">
 
-                                    UGX {{ summary.contributions.overall_paid }}
+                                    {{ summary.contributions.overall_paid|ugx }}
 
                                 </td>
 
                                 <td class="text-end text-danger">
 
-                                    UGX {{ summary.contributions.overall_balance }}
+                                    {{ summary.contributions.overall_balance|ugx }}
 
                                 </td>
 
@@ -496,7 +496,7 @@
 
                             <td class="text-end">
 
-                                UGX {{ summary.total_deposits }}
+                                {{ summary.total_deposits|ugx }}
 
                             </td>
 
@@ -508,7 +508,7 @@
 
                             <td class="text-end">
 
-                                UGX {{ summary.loan.balance }}
+                                {{ summary.loan.balance|ugx }}
 
                             </td>
 
@@ -520,7 +520,7 @@
 
                             <td class="text-end">
 
-                                UGX {{ summary.investment.unit_trust }}
+                                {{ summary.investment.unit_trust|ugx }}
 
                             </td>
 
@@ -532,7 +532,7 @@
 
                             <td class="text-end">
 
-                                UGX {{ summary.net_position }}
+                                {{ summary.net_position|ugx }}
 
                             </td>
 
@@ -548,6 +548,7 @@
 
     </div>
 
+    {% endif %}
 
 
     <!-- ===================================================== -->
@@ -698,7 +699,7 @@
 
                             <td class="text-end fw-semibold">
 
-                                UGX {{ contribution.amount }}
+                                {{ contribution.amount|ugx }}
 
                             </td>
 
@@ -804,7 +805,7 @@
 
                     <h2 class="text-primary">
 
-                        UGX {{ summary.loan.balance }}
+                        {{ summary.loan.balance|ugx }}
 
                     </h2>
 
@@ -839,7 +840,7 @@
 
                     <h2 class="text-success">
 
-                        UGX {{ summary.investment.unit_trust }}
+                        {{ summary.investment.unit_trust|ugx }}
 
                     </h2>
 

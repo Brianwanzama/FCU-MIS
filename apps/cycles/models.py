@@ -92,11 +92,13 @@ class Cycle(models.Model):
       which matters a great deal once Manual 4.5(d) ("no loan may extend beyond
       the currently running Financial Cycle") is enforced against these dates.
 
-    * `per_member_target` is per MEMBER, not unit-wide: (100,000 + 5,000) x 6 =
-      UGX 630,000. The unit-wide figure is deliberately NOT stored - it is a
-      function of how many members are active, which changes mid-cycle, so a
-      stored copy would be stale the moment anyone joins or goes inactive. Read
-      it from `unit_target` instead.
+    * Deposits and emergency contributions are SEPARATE obligations:
+      `member_deposit_target` (100,000 x 6 = UGX 600,000) and
+      `member_emergency_target` (5,000 x 6 = UGX 30,000). `per_member_target`
+      is only their stored sum (UGX 630,000) and must not be reported as the
+      deposit target. Unit-wide figures are deliberately NOT stored - they
+      depend on how many members are eligible, which changes mid-cycle. Read
+      them from `unit_deposit_target` / `unit_emergency_target` instead.
 
     * CLOSED means LOCKED. Closing is an explicit, deliberate act with pre-close
       validation - it is never a silent side effect of activating some other
@@ -341,19 +343,37 @@ class Cycle(models.Model):
     # ------------------------------------------------------------------
 
     @property
-    def unit_target(self):
-        """
-        Unit-wide contribution target for this cycle = per-member target x the
-        number of members who are currently Active.
+    def member_deposit_target(self):
+        """One member's deposit (savings) target: monthly savings x duration."""
+        return (self.monthly_savings_amount or Decimal("0")) * (self.duration_months or 0)
 
-        Computed on read, never stored: membership changes mid-cycle and a stored
-        total would immediately be wrong. This is the number the Cycle Summary
-        and the dashboard's "Total Contributions target" should quote.
+    @property
+    def member_emergency_target(self):
+        """One member's emergency obligation: monthly emergency x duration."""
+        return (self.monthly_emergency_amount or Decimal("0")) * (self.duration_months or 0)
+
+    @property
+    def eligible_member_count(self):
+        """
+        Members counted towards the unit-wide targets: currently ACTIVE members.
+
+        Computed on read, never stored. NOTE: this is today's headcount. Per-cycle
+        eligibility (join and withdrawal dates) is a later roadmap item; until
+        then a closed cycle's unit targets follow the current headcount.
         """
         from apps.members.models import Member
 
-        active = Member.objects.filter(status=Member.Status.ACTIVE).count()
-        return self.per_member_target * active
+        return Member.objects.filter(status=Member.Status.ACTIVE).count()
+
+    @property
+    def unit_deposit_target(self):
+        """Unit-wide deposit target (emergency excluded): members x deposit target."""
+        return self.member_deposit_target * self.eligible_member_count
+
+    @property
+    def unit_emergency_target(self):
+        """Unit-wide emergency obligation, reported separately from deposits."""
+        return self.member_emergency_target * self.eligible_member_count
 
     @property
     def is_open(self):

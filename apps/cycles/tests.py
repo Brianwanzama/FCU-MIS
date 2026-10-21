@@ -248,15 +248,17 @@ class UnitTargetTests(TestCase):
     inventing a second one.
     """
 
-    def test_unit_target_is_per_member_target_times_active_members(self):
+    def test_unit_targets_are_per_member_targets_times_active_members(self):
         active = Member.objects.filter(status=Member.Status.ACTIVE).count()
         self.assertEqual(active, 19)  # the real FCU roster
 
         c = services.create_cycle(make_cycle(1, date(2026, 1, 1)))
         self.assertEqual(c.per_member_target, Decimal("630000.00"))
-        self.assertEqual(c.unit_target, Decimal("11970000.00"))  # 630,000 x 19
+        self.assertEqual(c.unit_deposit_target, Decimal("11400000"))  # 600,000 x 19
+        self.assertEqual(c.unit_emergency_target, Decimal("570000"))  # 30,000 x 19
 
-    def test_unit_target_moves_when_a_member_goes_inactive(self):
+    def test_unit_targets_move_when_a_member_goes_inactive(self):
         c = services.create_cycle(make_cycle(1, date(2026, 1, 1)))
         Member.objects.filter(member_code="FCU019").update(status=Member.Status.INACTIVE)
-        self.assertEqual(c.unit_target, Decimal("11340000.00"))  # 630,000 x 18
+        self.assertEqual(c.unit_deposit_target, Decimal("10800000"))  # 600,000 x 18
+        self.assertEqual(c.unit_emergency_target, Decimal("540000"))  # 30,000 x 18

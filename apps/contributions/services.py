@@ -154,15 +154,8 @@ def member_contribution_summary(member, cycle):
         or Decimal("0")
     )
 
-    monthly_due = (
-        cycle.monthly_savings_amount *
-        cycle.duration_months
-    )
-
-    emergency_due = (
-        cycle.monthly_emergency_amount *
-        cycle.duration_months
-    )
+    monthly_due = cycle.member_deposit_target
+    emergency_due = cycle.member_emergency_target
 
     return {
         "monthly_due": monthly_due,
@@ -213,51 +206,78 @@ def member_balance(member, cycle):
         "overall_paid": summary["overall_paid"],
         "overall_balance": summary["overall_balance"],
 
+        # Each obligation must be cleared on its own: an emergency
+        # overpayment never covers a deposit shortfall, or vice versa.
         "eligible": (
-            summary["overall_balance"] <= Decimal("0")
+            summary["monthly_balance"] <= Decimal("0")
+            and summary["emergency_balance"] <= Decimal("0")
         ),
     }
 # ============================================================
 # CYCLE SUMMARY
 # ============================================================
 
-# ============================================================
-# CYCLE SUMMARY
-# ============================================================
-
-def cycle_contribution_summary(cycle):
-    """
-    Returns contribution statistics for an entire cycle.
-
-    The expected contribution is derived from the Cycle model's
-    unit_target property, which automatically uses the current
-    number of ACTIVE members.
-    """
-
-    collected = (
-        Contribution.objects.filter(
-            cycle=cycle
-        ).aggregate(
-            total=Sum("amount")
-        )["total"]
-        or Decimal("0")
-    )
-
-    expected = cycle.unit_target
+def _progress(expected, collected):
 
     outstanding = expected - collected
 
-    collection_rate = (
+    rate = (
         (collected / expected * Decimal("100"))
         if expected > 0
         else Decimal("0")
     )
 
+    return outstanding, round(rate, 2)
+
+
+def cycle_contribution_summary(cycle):
+    """
+    Returns contribution statistics for an entire cycle.
+
+    Deposits and emergency contributions are reported separately and never
+    mixed. Targets come from the Cycle's own configuration:
+
+        deposit target   = eligible members x monthly savings x months
+        emergency target = eligible members x monthly emergency x months
+
+    Keys `expected`, `collected`, `outstanding` and `collection_rate` describe
+    DEPOSITS only (emergency excluded); emergency has its own `emergency_*`
+    keys.
+    """
+
+    def collected_for(contribution_type):
+        return (
+            Contribution.objects.filter(
+                cycle=cycle,
+                contribution_type=contribution_type,
+            ).aggregate(total=Sum("amount"))["total"]
+            or Decimal("0")
+        )
+
+    members = cycle.eligible_member_count
+
+    expected = cycle.unit_deposit_target
+    collected = collected_for(Contribution.ContributionType.MONTHLY)
+    outstanding, collection_rate = _progress(expected, collected)
+
+    emergency_expected = cycle.unit_emergency_target
+    emergency_collected = collected_for(Contribution.ContributionType.EMERGENCY)
+    emergency_outstanding, emergency_rate = _progress(
+        emergency_expected, emergency_collected
+    )
+
     return {
+        "eligible_members": members,
+
         "expected": expected,
         "collected": collected,
         "outstanding": outstanding,
-        "collection_rate": round(collection_rate, 2),
+        "collection_rate": collection_rate,
+
+        "emergency_expected": emergency_expected,
+        "emergency_collected": emergency_collected,
+        "emergency_outstanding": emergency_outstanding,
+        "emergency_collection_rate": emergency_rate,
     }
 
 

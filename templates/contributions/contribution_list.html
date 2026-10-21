@@ -39,12 +39,12 @@ Contribution Register
             <div class="card-body">
 
                 <small class="text-muted text-uppercase">
-                    Expected
+                    Deposits expected
                 </small>
 
                 <h3 class="mt-2 mb-0">
 
-                    UGX {{ summary.expected }}
+                    {{ summary.expected|ugx }}
 
                 </h3>
 
@@ -61,12 +61,12 @@ Contribution Register
             <div class="card-body">
 
                 <small class="text-muted text-uppercase">
-                    Collected
+                    Deposits collected
                 </small>
 
                 <h3 class="mt-2 mb-0">
 
-                    UGX {{ summary.collected }}
+                    {{ summary.collected|ugx }}
 
                 </h3>
 
@@ -83,12 +83,12 @@ Contribution Register
             <div class="card-body">
 
                 <small class="text-muted text-uppercase">
-                    Outstanding
+                    Deposits outstanding
                 </small>
 
                 <h3 class="mt-2 mb-0">
 
-                    UGX {{ summary.outstanding }}
+                    {{ summary.outstanding|ugx }}
 
                 </h3>
 
@@ -105,14 +105,13 @@ Contribution Register
             <div class="card-body">
 
                 <small class="text-muted text-uppercase">
-                    Collection Rate
+                    Deposit collection rate
                 </small>
 
                 <h3 class="mt-2 mb-0">
 
                     {% if summary.expected %}
-                        {{ summary.collected|floatformat:0 }} /
-                        {{ summary.expected|floatformat:0 }}
+                        {{ summary.collection_rate }}%
                     {% else %}
                         0%
                     {% endif %}
@@ -338,7 +337,7 @@ Contribution Register
 
                         <td class="text-end">
 
-                            UGX {{ contribution.amount }}
+                            {{ contribution.amount|ugx }}
 
                         </td>
 
