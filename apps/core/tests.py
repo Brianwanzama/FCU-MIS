@@ -99,3 +99,26 @@ class SeedDemoTests(TestCase):
         counts = (User.objects.count(),)
         call_command("seed_demo", "--force", stdout=StringIO())
         self.assertEqual((User.objects.count(),), counts)
+
+
+class DashboardLoanCardTests(TestCase):
+    def test_dashboard_no_longer_says_loans_are_coming(self):
+        from apps.members.models import Member
+
+        u = User.objects.create_user(
+            username="t", password="pw", role=User.Role.TREASURER, member=Member.objects.first()
+        )
+        self.client.login(username="t", password="pw")
+        r = self.client.get("/dashboard/")
+        self.assertEqual(r.status_code, 200)
+        self.assertNotContains(r, "coming next")
+        self.assertContains(r, "Applications awaiting a decision")
+
+    def test_member_sees_their_own_loan_balance_card(self):
+        from apps.members.models import Member
+
+        User.objects.create_user(username="m", password="pw", role=User.Role.MEMBER, member=Member.objects.first())
+        self.client.login(username="m", password="pw")
+        r = self.client.get("/dashboard/")
+        self.assertContains(r, "My loan balance")
+        self.assertNotContains(r, "Applications awaiting a decision")

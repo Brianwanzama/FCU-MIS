@@ -38,7 +38,7 @@
       <div class="card-header">Repayment schedule</div>
       <div class="table-responsive">
         <table class="table table-sm align-middle mb-0">
-          <thead><tr><th>#</th><th>Due</th><th class="text-end">Due</th><th class="text-end">Paid</th><th class="text-end">Left</th><th></th></tr></thead>
+          <thead><tr><th>#</th><th>Due date</th><th class="text-end">Instalment</th><th class="text-end">Paid</th><th class="text-end">Left</th><th></th></tr></thead>
           <tbody>
           {% for i in installments %}
             <tr>
@@ -103,7 +103,7 @@
       <div class="card-body">
         <dl class="row mb-0">
           <dt class="col-6">Disbursed</dt><dd class="col-6">{{ loan.disbursed_on|date:"d M Y" }}</dd>
-          <dt class="col-6">Paid out by</dt><dd class="col-6">{{ loan.get_disbursement_method_display|default:loan.disbursement_method }}{% if loan.disbursement_reference %} ({{ loan.disbursement_reference }}){% endif %}</dd>
+          <dt class="col-6">Paid out by</dt><dd class="col-6">{{ loan.disbursement_method_label }}{% if loan.disbursement_reference %} ({{ loan.disbursement_reference }}){% endif %}</dd>
           <dt class="col-6">Final due date</dt><dd class="col-6">{{ loan.final_due_date|date:"d M Y" }}</dd>
           <dt class="col-6">Total to repay</dt><dd class="col-6">{{ loan.total_due|ugx }}</dd>
           <dt class="col-6">Repaid so far</dt><dd class="col-6">{{ loan.total_paid|ugx }}</dd>

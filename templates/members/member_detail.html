@@ -139,13 +139,13 @@
 
                     <small class="text-muted">
 
-                        Expected Contributions
+                        Deposit Target
 
                     </small>
 
                     <h3 class="mt-2">
 
-                        {{ summary.contributions.overall_due|ugx }}
+                        {{ summary.contributions.monthly_due|ugx }}
 
                     </h3>
 
@@ -163,13 +163,13 @@
 
                     <small class="text-muted">
 
-                        Contributions Paid
+                        Deposits Paid
 
                     </small>
 
                     <h3 class="mt-2 text-success">
 
-                        {{ summary.contributions.overall_paid|ugx }}
+                        {{ summary.contributions.monthly_paid|ugx }}
 
                     </h3>
 
@@ -187,13 +187,13 @@
 
                     <small class="text-muted">
 
-                        Outstanding
+                        Deposits Outstanding
 
                     </small>
 
                     <h3 class="mt-2 text-danger">
 
-                        {{ summary.contributions.overall_balance|ugx }}
+                        {{ summary.contributions.monthly_balance|ugx }}
 
                     </h3>
 
@@ -887,12 +887,14 @@
 
                     </h2>
 
-                    <p class="text-muted">
-
-                        Active loans, repayments, penalties and automatic
-                        savings recovery will appear here.
-
-                    </p>
+                    {% for loan in summary.loan.loans %}
+                        <p class="small mb-1">
+                            <a href="{% url 'loans:loan' loan.pk %}">{{ loan.reference }}</a>
+                            &middot; {{ loan.principal|ugx }} borrowed &middot; {{ loan.display_status }}
+                        </p>
+                    {% empty %}
+                        <p class="text-muted">No loans.</p>
+                    {% endfor %}
 
                 </div>
 
@@ -960,37 +962,38 @@
 
             <div class="d-flex flex-wrap gap-2">
 
+                {% if user.has_financial_write_access %}
                 <a href="{% url 'contributions:create' %}"
                    class="btn btn-primary">
 
                     Record Contribution
 
                 </a>
+                {% endif %}
 
-                <button class="btn btn-outline-primary" disabled>
+                {% if viewing_own %}
+                <a href="{% url 'loans:mine' %}" class="btn btn-outline-primary">My Loans</a>
+                {% elif user.has_financial_view_access %}
+                <a href="{% url 'loans:register' %}" class="btn btn-outline-primary">Loan Register</a>
+                {% endif %}
 
-                    Issue Loan
+                {% if current_cycle %}
+                <a href="{% url 'members:statement' member.member_code %}?cycle={{ current_cycle.pk }}"
+                   class="btn btn-outline-primary">
 
-                </button>
+                    Statement
 
-                <button class="btn btn-outline-primary" disabled>
+                </a>
+                {% endif %}
 
-                    Record Loan Repayment
-
-                </button>
-
-                <button class="btn btn-outline-primary" disabled>
-
-                    Download Statement
-
-                </button>
-
+                {% if user.has_full_access %}
                 <a href="{% url 'admin:members_member_change' member.id %}"
                    class="btn btn-outline-secondary">
 
                     Edit Member
 
                 </a>
+                {% endif %}
 
             </div>
 

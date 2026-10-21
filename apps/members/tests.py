@@ -189,3 +189,28 @@ class PageTests(MemberFinanceTestCase):
         self.assertIn(f"/members/{self.m1.member_code}/", html)
         self.assertNotIn(f"/members/{self.m2.member_code}/", html)
         self.assertNotIn("New Member", html)
+
+
+class MemberPageTextTests(MemberFinanceTestCase):
+    def test_header_cards_report_deposits_not_a_mixed_total(self):
+        self.client.login(username="me", password="pw")
+        r = self.client.get(f"/members/{self.m1.member_code}/")
+        self.assertContains(r, "Deposit Target")
+        self.assertContains(r, "Deposits Paid")
+        self.assertNotContains(r, "Expected Contributions")
+
+    def test_no_dead_buttons_or_placeholder_text(self):
+        self.client.login(username="me", password="pw")
+        r = self.client.get(f"/members/{self.m1.member_code}/")
+        self.assertNotContains(r, "will appear here")
+        self.assertNotContains(r, "disabled>")
+
+    def test_quick_actions_follow_the_role(self):
+        self.client.login(username="me", password="pw")
+        r = self.client.get(f"/members/{self.m1.member_code}/")
+        self.assertNotContains(r, "Record Contribution")
+        self.assertNotContains(r, "Edit Member")
+        self.client.login(username="admin", password="pw")
+        r = self.client.get(f"/members/{self.m1.member_code}/")
+        self.assertContains(r, "Record Contribution")
+        self.assertContains(r, "Edit Member")
