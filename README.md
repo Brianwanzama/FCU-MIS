@@ -239,6 +239,12 @@ loans with repayments, investments with transactions, and each member's statemen
   membership fees are not recorded yet, so check it against the bank and cash balances.
 - Interest earned counts what is paid as interest first within each instalment.
 
+## Deployment
+
+See **docs/DEPLOYMENT.md** (Railway setup, variables, first deployment, backups, enabling loan
+recovery). `python manage.py preflight` checks an installation; `GET /healthz/` is the
+health check; CI runs on every push (`.github/workflows/ci.yml`).
+
 ## Next phase
 
 The SRS was revised to v1.1 (General Ledger, Financial Position, Cycle Locking,

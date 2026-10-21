@@ -1,4 +1,6 @@
 from django.contrib.auth.decorators import login_required
+from django.db import connection
+from django.http import JsonResponse
 from django.shortcuts import redirect, render
 
 from apps.members.models import Member
@@ -49,3 +51,17 @@ def dashboard(request):
 @login_required
 def home_redirect(request):
     return redirect("core:dashboard")
+
+
+def healthz(request):
+    """
+    Liveness and database check for the hosting platform. No login, and it says
+    nothing about the system beyond "ok" or "database unavailable".
+    """
+
+    try:
+        connection.ensure_connection()
+    except Exception:
+        return JsonResponse({"status": "database unavailable"}, status=503)
+
+    return JsonResponse({"status": "ok"})

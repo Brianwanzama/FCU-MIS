@@ -1,0 +1,14 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "NIXPACKS",
+    "buildCommand": "DJANGO_SETTINGS_MODULE=config.settings.prod python manage.py collectstatic --noinput"
+  },
+  "deploy": {
+    "startCommand": "DJANGO_SETTINGS_MODULE=config.settings.prod python manage.py migrate --noinput && gunicorn config.wsgi:application --workers 3 --timeout 60",
+    "healthcheckPath": "/healthz/",
+    "healthcheckTimeout": 120,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 3
+  }
+}
