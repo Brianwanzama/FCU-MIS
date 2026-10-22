@@ -1,5 +1,9 @@
+import logging
+
 from django.contrib import messages
 from django.contrib.auth import login as auth_login
+from django.contrib.auth import views as auth_views
+from django.http import HttpResponseRedirect
 from django.shortcuts import redirect
 from django.views.generic import FormView, ListView, View
 
@@ -9,6 +13,8 @@ from apps.auditlog.utils import log_action
 from .forms import AccountActivationForm
 from .models import User
 from .permissions import RoleRequiredMixin
+
+logger = logging.getLogger(__name__)
 
 
 class ActivateAccountView(FormView):
@@ -221,3 +227,20 @@ class ChangeUserRoleView(RoleRequiredMixin, View):
         )
 
         return redirect("accounts:user_management")
+
+
+class FCUPasswordResetView(auth_views.PasswordResetView):
+    """
+    Password reset that never shows a server error because the mail server is down or
+    not configured. The visitor always sees the same "check your email" page (so the
+    form cannot be used to find out which emails are registered), and the failure is
+    written to the log for the Administrator.
+    """
+
+    def form_valid(self, form):
+
+        try:
+            return super().form_valid(form)
+        except Exception:
+            logger.exception("Password reset email could not be sent")
+            return HttpResponseRedirect(self.get_success_url())
