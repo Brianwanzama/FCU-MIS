@@ -129,3 +129,62 @@ class DashboardLoanCardTests(TestCase):
         r = self.client.get("/dashboard/")
         self.assertContains(r, "My loan balance")
         self.assertNotContains(r, "Applications awaiting a decision")
+
+
+class SecretKeyFallbackTests(TestCase):
+    """Production must start safely even when DJANGO_SECRET_KEY was never set properly."""
+
+    def settings_of(self, **env):
+        import os
+        import subprocess
+        import sys
+
+        from django.conf import settings as dj
+
+        base = {k: v for k, v in os.environ.items() if not k.startswith(("DJANGO_", "DATABASE_URL"))}
+        base.update({"DJANGO_SETTINGS_MODULE": "config.settings.prod", **env})
+        code = (
+            "import django; django.setup(); from django.conf import settings as s; "
+            "print(len(s.SECRET_KEY), s.SECRET_KEY_IS_DERIVED, s.SECRET_KEY)"
+        )
+        done = subprocess.run(
+            [sys.executable, "-c", code], cwd=dj.BASE_DIR, env=base, capture_output=True, text=True
+        )
+        return done
+
+    def test_sample_key_with_a_database_url_derives_a_safe_key(self):
+        r = self.settings_of(DJANGO_SECRET_KEY="change-me-to-a-random-50-char-string",
+                             DATABASE_URL="postgres://u:s3cretpw@db.internal:5432/x")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        length, derived, key = r.stdout.split()
+        self.assertEqual((int(length), derived), (64, "True"))
+        self.assertNotIn("change-me", key)
+
+    def test_derived_key_is_stable_and_depends_on_the_database_address(self):
+        a1 = self.settings_of(DJANGO_SECRET_KEY="x", DATABASE_URL="postgres://u:one@db:5432/x").stdout
+        a2 = self.settings_of(DJANGO_SECRET_KEY="x", DATABASE_URL="postgres://u:one@db:5432/x").stdout
+        b = self.settings_of(DJANGO_SECRET_KEY="x", DATABASE_URL="postgres://u:two@db:5432/x").stdout
+        self.assertEqual(a1, a2)
+        self.assertNotEqual(a1, b)
+
+    def test_a_real_key_is_used_as_given(self):
+        import secrets
+
+        key = secrets.token_urlsafe(60)
+        r = self.settings_of(DJANGO_SECRET_KEY=key, DATABASE_URL="postgres://u:p@db:5432/x")
+        self.assertEqual(r.stdout.split(), [str(len(key)), "False", key])
+
+    def test_refuses_to_start_with_neither_a_key_nor_a_database(self):
+        r = self.settings_of(
+            DJANGO_SECRET_KEY="change-me-to-a-random-50-char-string",
+            DATABASE_URL="postgres://postgres:devpassword@localhost:5432/fcu_mis",  # the development default
+        )
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("DJANGO_SECRET_KEY", r.stderr)
+
+    @override_settings(**{**PRODUCTION_LIKE, "SECRET_KEY_IS_DERIVED": True})
+    def test_preflight_warns_when_the_key_is_derived(self):
+        User.objects.create_user(username="a", password="x", role=User.Role.ADMINISTRATOR)
+        out = StringIO()
+        call_command("preflight", stdout=out)
+        self.assertIn("derived from the database address", out.getvalue())

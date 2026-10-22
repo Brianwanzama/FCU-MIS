@@ -11,7 +11,9 @@ Production (Railway):
     Reads values from Railway environment variables.
 """
 
+import os
 from pathlib import Path
+
 import environ
 
 # ---------------------------------------------------------------------
@@ -193,7 +195,16 @@ MEDIA_URL = "/media/"
 
 # On Railway, point this at a persistent volume, or uploaded document templates are
 # lost on every deploy.
-MEDIA_ROOT = env.str("FCU_MEDIA_ROOT", default="") or str(BASE_DIR / "media")
+def _volume_or(subfolder, fallback):
+    """Use a writable /data volume (Railway) when one is mounted, else the fallback folder."""
+
+    if os.path.isdir("/data") and os.access("/data", os.W_OK):
+        return f"/data/{subfolder}"
+
+    return str(fallback)
+
+
+MEDIA_ROOT = env.str("FCU_MEDIA_ROOT", default="") or _volume_or("media", BASE_DIR / "media")
 
 # ---------------------------------------------------------------------
 # Default PK
@@ -231,7 +242,9 @@ FCU_MAX_LOAN_REPAYMENT_MONTHS = 3
 # Uploaded forms (signed declarations, loan applications) are private: they live
 # outside MEDIA_ROOT, are never served as static files, and are only handed out by
 # views that check who is asking. On Railway point this at a persistent volume.
-PRIVATE_MEDIA_ROOT = env.str("FCU_PRIVATE_MEDIA_ROOT", default="") or str(BASE_DIR / "private_media")
+PRIVATE_MEDIA_ROOT = env.str("FCU_PRIVATE_MEDIA_ROOT", default="") or _volume_or(
+    "private", BASE_DIR / "private_media"
+)
 
 FCU_UPLOAD_MAX_MB = env.int("FCU_UPLOAD_MAX_MB", default=5)
 

@@ -1,3 +1,6 @@
+import hashlib
+import hmac
+
 from django.core.exceptions import ImproperlyConfigured
 
 from .base import *  # noqa: F401,F403
@@ -9,14 +12,29 @@ from .base import BASE_DIR, SECRET_KEY, env  # noqa: F401
 
 DEBUG = False
 
-# The sample values in .env.example are public, so they must never be accepted.
+# The sample values in .env.example are public, so they must never be used as the key.
 PLACEHOLDER_KEY_PREFIXES = ("unsafe", "change-me", "django-insecure", "changeme", "secret")
 
+SECRET_KEY_IS_DERIVED = False
+
 if SECRET_KEY.lower().startswith(PLACEHOLDER_KEY_PREFIXES) or len(SECRET_KEY) < 50:
-    raise ImproperlyConfigured(
-        "DJANGO_SECRET_KEY is missing, too short or still a sample value. Generate one with: "
-        "python -c \"import secrets; print(secrets.token_urlsafe(60))\""
-    )
+    # No usable DJANGO_SECRET_KEY was set. Rather than refuse to start (or, worse, run with a
+    # public sample key), derive a key from the database address, which contains the database
+    # password and is known only to this deployment. It is stable between deploys, so sessions
+    # survive restarts. It is a safety net: set a real DJANGO_SECRET_KEY when you can.
+    _database_url = env("DATABASE_URL", default="")
+
+    if not _database_url or "devpassword" in _database_url:
+        raise ImproperlyConfigured(
+            "DJANGO_SECRET_KEY is missing, too short or still a sample value, and there is no "
+            "DATABASE_URL to derive a key from. Generate a key with: "
+            "python -c \"import secrets; print(secrets.token_urlsafe(60))\""
+        )
+
+    SECRET_KEY = hmac.new(
+        b"fcu-mis-derived-secret-key-v1", _database_url.encode(), hashlib.sha256
+    ).hexdigest()
+    SECRET_KEY_IS_DERIVED = True
 
 # Railway domains, plus any custom domain listed in DJANGO_ALLOWED_HOSTS.
 ALLOWED_HOSTS = [
