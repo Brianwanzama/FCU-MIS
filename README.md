@@ -245,7 +245,7 @@ See **docs/TESTING.md**: run it on your computer, load demo logins with `python 
 
 ## Deployment
 
-See **docs/DEPLOYMENT.md** (Railway setup, variables, first deployment, backups, enabling loan
+See **docs/DEPLOYMENT.md** (Railway) or **docs/DEPLOY_DROPLET.md** (DigitalOcean Droplet) (Railway setup, variables, first deployment, backups, enabling loan
 recovery). `python manage.py preflight` checks an installation; `GET /healthz/` is the
 health check; CI runs on every push (`.github/workflows/ci.yml`).
 

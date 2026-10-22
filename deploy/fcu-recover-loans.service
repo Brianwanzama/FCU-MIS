@@ -1,0 +1,12 @@
+[Unit]
+Description=FCU-MIS daily overdue-loan check and recovery (Manual 4.6)
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=fcu
+Group=fcu
+WorkingDirectory=/opt/fcu-mis
+EnvironmentFile=/etc/fcu-mis/env
+# Does nothing but report until FCU_LOAN_AUTO_RECOVERY_ENABLED=True in /etc/fcu-mis/env.
+ExecStart=/opt/fcu-mis/venv/bin/python manage.py recover_overdue_loans

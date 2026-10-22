@@ -1,0 +1,7 @@
+[Unit]
+Description=FCU-MIS nightly backup (database and uploaded files)
+After=postgresql.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/fcu-mis/deploy/backup.sh
