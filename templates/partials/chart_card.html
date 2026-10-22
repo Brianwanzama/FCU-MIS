@@ -1,0 +1,17 @@
+{# Usage: {% include "partials/chart_card.html" with chart_id="x" kind="monthly" title="..." data=data note="..." size="short" %} #}
+<div class="card fcu-card fcu-chart-card h-100">
+  <div class="card-header">{{ title }}</div>
+  <div class="card-body">
+    {% if empty %}
+      <div class="fcu-chart-empty">{{ empty }}</div>
+    {% else %}
+      <div class="fcu-chart-box {{ size }}">
+        <canvas id="{{ chart_id }}" data-fcu-chart="{{ kind }}" data-source="{{ chart_id }}-data"
+                role="img" aria-label="{{ title }}. A table of the same figures is below the chart."></canvas>
+      </div>
+      {% with sid=chart_id|add:"-data" %}{{ data|json_script:sid }}{% endwith %}
+      <div data-fcu-table></div>
+      {% if note %}<div class="fcu-chart-note">{{ note }}</div>{% endif %}
+    {% endif %}
+  </div>
+</div>

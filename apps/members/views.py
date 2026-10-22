@@ -96,6 +96,11 @@ class MemberDetailView(MemberFinanceAccessMixin, DetailView):
 
         context["available_savings"] = member_available_savings(self.object)
 
+        if cycle:
+            from apps.reports.charts import monthly_deposits
+
+            context["chart_monthly"] = monthly_deposits(cycle, member=self.object)
+
         return context
 
 

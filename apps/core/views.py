@@ -44,7 +44,21 @@ def dashboard(request):
             "overdue": sum(1 for l in open_loans if l.display_status() in ("Overdue", "Defaulted")),
         }
 
+    charts = {}
+
+    if active_cycle and user.has_financial_view_access:
+        from apps.reports.charts import member_status, monthly_deposits
+        from apps.reports.services import member_rows
+
+        charts["monthly"] = monthly_deposits(active_cycle)
+        charts["status"] = member_status(member_rows(active_cycle))
+    elif active_cycle and user.member_id:
+        from apps.reports.charts import monthly_deposits
+
+        charts["mine"] = monthly_deposits(active_cycle, member=user.member)
+
     context = {
+        "charts": charts,
         "loan_card": loan_card,
         "user": request.user,
         "member_count": Member.objects.count(),

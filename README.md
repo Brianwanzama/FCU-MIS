@@ -239,6 +239,22 @@ loans with repayments, investments with transactions, and each member's statemen
   membership fees are not recorded yet, so check it against the bank and cash balances.
 - Interest earned counts what is paid as interest first within each instalment.
 
+## Charts
+
+Interactive charts (Chart.js 4.4.1, bundled in `static/vendor/`, so no outside CDN is needed):
+
+- **Dashboard (officers):** deposits collected each month against the monthly target, and a ring of who
+  has met the deposit target. **Members** see their own deposits each month instead.
+- **Cycle report:** the same two, plus deposits paid by each member (click a bar to open the member) and
+  where the investments are.
+- **Investments:** where the money is, and the total return on each investment.
+- **Member page:** deposits paid each month against the monthly savings.
+
+Hover for exact figures, click the legend to hide a series. Every chart has a **View as table** fallback
+with the same numbers. Colours are the validated blue, orange and aqua series; the target ring uses the
+fixed status colours with a symbol and a label so it never relies on colour alone. Charts are hidden when
+printing. The data comes from `apps/reports/charts.py`, from the same records as the reports.
+
 ## Trying it out
 
 See **docs/TESTING.md**: run it on your computer, load demo logins with `python manage.py seed_demo`, and a walkthrough per role.

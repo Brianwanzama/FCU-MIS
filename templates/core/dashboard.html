@@ -109,7 +109,22 @@
 
 </div>
 
-
+{% if charts.monthly %}
+<div class="row g-3 mt-1 mb-3">
+    <div class="col-lg-8">
+        {% include "partials/chart_card.html" with chart_id="chart-monthly" kind="monthly" title="Deposits collected each month" data=charts.monthly note="Bars are what was paid for each month; the dashed line is the monthly target for all eligible members." %}
+    </div>
+    <div class="col-lg-4">
+        {% include "partials/chart_card.html" with chart_id="chart-status" kind="status" title="Who has met the deposit target" data=charts.status note="Members in this cycle." %}
+    </div>
+</div>
+{% elif charts.mine %}
+<div class="row g-3 mt-1 mb-3">
+    <div class="col-12">
+        {% include "partials/chart_card.html" with chart_id="chart-mine" kind="monthly" title="My deposits each month" data=charts.mine note="Bars are what you paid for each month; the dashed line is your monthly savings." %}
+    </div>
+</div>
+{% endif %}
 
 <div class="row g-3">
 
@@ -394,4 +409,10 @@
 
 </div>
 
+{% endblock %}
+
+{% block extra_scripts %}
+{% load static %}
+<script src="{% static 'vendor/chart.umd.js' %}"></script>
+<script src="{% static 'js/fcu-charts.js' %}"></script>
 {% endblock %}
