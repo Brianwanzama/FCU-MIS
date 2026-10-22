@@ -8,11 +8,21 @@ prepare and what to do afterwards.
 > socket with the same settings, but the script has **not been run on a real Droplet** yet.
 > Do the first install on a new, empty Droplet and read its output.
 
+## 0. On a small budget ($5 a month)
+
+DigitalOcean's cheapest Droplet is **$4 a month** (512 MB RAM, 1 vCPU, 10 GB disk), and the next one
+up is $6 (1 GB). FCU has about 19 members, so the $4 Droplet is enough if it has swap. `setup.sh` adds
+2 GB of swap and trims PostgreSQL automatically on a server this small, and runs 2 app workers.
+With DigitalOcean's backups (about 20% of the price, so about $0.80) the total is **about $4.80 a month**.
+Extras: a domain costs roughly $10 to $15 a year, or you can use a free name from a dynamic DNS service
+such as DuckDNS (HTTPS still works). If the site ever feels slow or the server runs out of memory,
+resize to the $6 Droplet; resizing keeps your data.
+
 ## 1. What you need
 
 | | |
 | --- | --- |
-| Droplet | Ubuntu 24.04 LTS, **2 GB RAM / 1 vCPU** (about $12 a month) is plenty for FCU. Turn on **Backups** (weekly snapshots, about 20% extra). |
+| Droplet | Ubuntu 24.04 LTS. The **$4 (512 MB)** plan is enough for FCU (see section 0); **$6 (1 GB)** is more comfortable. Turn on **Backups** (weekly snapshots, about 20% extra). |
 | Domain | A name you control, such as `mis.fcu.org`. HTTPS needs one. |
 | DNS | An **A record** for that name pointing at the Droplet's IP address, made *before* you run the script. |
 | Access | Add your SSH key when creating the Droplet. Do not use password login. |
@@ -98,7 +108,7 @@ when it is down.
 
 | | Droplet | Railway |
 | --- | --- | --- |
-| Cost | Fixed, a few dollars | Pay by usage, usually a little more |
+| Cost | Fixed, from $4 | Pay by usage (check their current pricing) |
 | Effort | You maintain the server (updates, backups, security) | Mostly managed |
 | Control | Full | Limited |
 | Data location | A DigitalOcean region you choose | Railway's regions |

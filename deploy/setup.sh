@@ -26,6 +26,19 @@ apt-get install -y -qq python3 python3-venv python3-dev build-essential libpq-de
 python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)' \
   || { echo "Python 3.12 or newer is required (Ubuntu 24.04 has it)."; exit 1; }
 
+# Small Droplets (512 MB) need swap so a busy moment does not kill the database.
+TOTAL_MB=$(awk '/MemTotal/ {printf "%d", $2/1024}' /proc/meminfo)
+if [ "$TOTAL_MB" -lt 1500 ] && ! swapon --show | grep -q .; then
+  echo "==> Small server (${TOTAL_MB} MB): adding 2 GB of swap and trimming PostgreSQL"
+  fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile >/dev/null && swapon /swapfile
+  grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  sysctl -w vm.swappiness=20 >/dev/null
+  echo 'vm.swappiness=20' > /etc/sysctl.d/99-fcu-swap.conf
+  PGCONF=$(ls -d /etc/postgresql/*/main/conf.d | head -1)
+  printf 'shared_buffers = 64MB\nmax_connections = 30\nwork_mem = 4MB\nmaintenance_work_mem = 32MB\n' > "$PGCONF/99-fcu-small.conf"
+  systemctl restart postgresql
+fi
+
 echo "==> Service user and folders"
 id fcu >/dev/null 2>&1 || useradd --system --create-home --home-dir /home/fcu --shell /usr/sbin/nologin fcu
 mkdir -p "$DATA/media" "$DATA/private" /etc/fcu-mis /var/backups/fcu-mis

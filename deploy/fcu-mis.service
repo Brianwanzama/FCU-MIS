@@ -12,7 +12,7 @@ RuntimeDirectory=fcu-mis
 RuntimeDirectoryMode=0750
 ExecStart=/opt/fcu-mis/venv/bin/gunicorn config.wsgi:application \
     --bind unix:/run/fcu-mis/gunicorn.sock \
-    --workers 3 --timeout 60 --access-logfile - --error-logfile -
+    --workers 2 --timeout 60 --access-logfile - --error-logfile -
 Restart=on-failure
 RestartSec=3
 
