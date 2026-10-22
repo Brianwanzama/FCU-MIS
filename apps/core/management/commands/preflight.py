@@ -37,10 +37,18 @@ class Command(BaseCommand):
         key = settings.SECRET_KEY
         placeholder = key.lower().startswith(("unsafe", "change-me", "django-insecure", "changeme", "secret"))
         strong = len(key) >= 50 and not placeholder
-        add(
-            OK if strong else FAIL, "Secret key is long, random and not a sample value",
-            "" if strong else "Set DJANGO_SECRET_KEY to a new random value (the sample in .env.example is public).",
-        )
+        derived = getattr(settings, "SECRET_KEY_IS_DERIVED", False)
+
+        if derived:
+            add(
+                WARN, "Secret key is derived from the database address",
+                "No valid DJANGO_SECRET_KEY was set. This is safe but set a real one when you can.",
+            )
+        else:
+            add(
+                OK if strong else FAIL, "Secret key is long, random and not a sample value",
+                "" if strong else "Set DJANGO_SECRET_KEY to a new random value (the sample in .env.example is public).",
+            )
 
         hosts = settings.ALLOWED_HOSTS
         add(OK if hosts and "*" not in hosts else FAIL, "ALLOWED_HOSTS is set and not a wildcard", ", ".join(hosts))
