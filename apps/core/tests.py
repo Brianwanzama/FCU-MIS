@@ -61,6 +61,13 @@ class PreflightTests(TestCase):
         self.assertFalse(ok)
         self.assertIn("Secret key", text)
 
+    @override_settings(SECRET_KEY="change-me-to-a-random-50-char-string")
+    def test_fails_with_the_sample_key_from_env_example(self):
+        User.objects.create_user(username="a", password="x", role=User.Role.ADMINISTRATOR)
+        ok, text = self.run_preflight()
+        self.assertFalse(ok)
+        self.assertIn("sample value", text)
+
     @override_settings(ALLOWED_HOSTS=["*"])
     def test_fails_with_wildcard_hosts(self):
         User.objects.create_user(username="a", password="x", role=User.Role.ADMINISTRATOR)
