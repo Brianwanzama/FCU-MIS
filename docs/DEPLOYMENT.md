@@ -1,5 +1,7 @@
 # Deploying FCU-MIS on Railway
 
+> Prefer a DigitalOcean Droplet? See **docs/DEPLOY_DROPLET.md**.
+
 Everything here was checked by running the production settings locally (HTTPS redirect,
 host checking, secure cookies and headers, hashed static files, health check). What
 cannot be checked from outside Railway is listed under "Only you can verify".

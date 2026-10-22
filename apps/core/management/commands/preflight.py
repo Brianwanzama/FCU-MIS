@@ -35,8 +35,12 @@ class Command(BaseCommand):
         add(OK if production else WARN, "DEBUG is off", "" if production else "DEBUG is on: never run members on this.")
 
         key = settings.SECRET_KEY
-        strong = len(key) >= 32 and not key.startswith("unsafe")
-        add(OK if strong else FAIL, "Secret key is long and not the development default")
+        placeholder = key.lower().startswith(("unsafe", "change-me", "django-insecure", "changeme", "secret"))
+        strong = len(key) >= 50 and not placeholder
+        add(
+            OK if strong else FAIL, "Secret key is long, random and not a sample value",
+            "" if strong else "Set DJANGO_SECRET_KEY to a new random value (the sample in .env.example is public).",
+        )
 
         hosts = settings.ALLOWED_HOSTS
         add(OK if hosts and "*" not in hosts else FAIL, "ALLOWED_HOSTS is set and not a wildcard", ", ".join(hosts))

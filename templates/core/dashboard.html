@@ -240,11 +240,21 @@
 
             <div class="card-body">
 
-                <p class="text-muted">
+                {% if loan_card.mine %}
+                    <p class="mb-1"><strong>My loan balance</strong><br>{{ loan_card.mine.outstanding|ugx }}</p>
+                    {% for loan, label in loan_card.mine.loans %}
+                        <p class="small mb-1"><a href="{% url 'loans:loan' loan.pk %}">{{ loan.reference }}</a> &middot; {{ label }}</p>
+                    {% endfor %}
+                {% endif %}
 
-                    Loan module coming next.
-
-                </p>
+                {% if loan_card.officer %}
+                    <p class="mb-1"><strong>Applications awaiting a decision</strong><br>{{ loan_card.officer.pending_applications }}</p>
+                    <p class="mb-1"><strong>Loans out</strong><br>{{ loan_card.officer.active_loans }} ({{ loan_card.officer.outstanding|ugx }} owed)</p>
+                    <p class="mb-2"><strong>Overdue or defaulted</strong><br>{{ loan_card.officer.overdue }}</p>
+                    <a href="{% url 'loans:register' %}" class="btn btn-fcu-primary btn-sm">Loan Register</a>
+                {% else %}
+                    <a href="{% url 'loans:mine' %}" class="btn btn-fcu-primary btn-sm mt-2">My Loans</a>
+                {% endif %}
 
             </div>
 

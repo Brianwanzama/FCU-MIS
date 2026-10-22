@@ -22,7 +22,30 @@ def dashboard(request):
     if active_cycle:
         summary = cycle_contribution_summary(active_cycle)
 
+    from apps.loans.models import Loan, LoanApplication
+    from apps.loans.services import member_loan_summary
+
+    user = request.user
+    loan_card = {}
+
+    if user.member_id:
+        mine = member_loan_summary(user.member)
+        loan_card["mine"] = {
+            "outstanding": mine["balance"],
+            "loans": [(loan, loan.display_status()) for loan in mine["loans"] if loan.status != "SETTLED"],
+        }
+
+    if user.has_financial_view_access:
+        open_loans = [l for l in Loan.objects.exclude(status="SETTLED").prefetch_related("installments", "repayments")]
+        loan_card["officer"] = {
+            "pending_applications": LoanApplication.objects.filter(status=LoanApplication.Status.SUBMITTED).count(),
+            "active_loans": len(open_loans),
+            "outstanding": sum((l.outstanding for l in open_loans), 0),
+            "overdue": sum(1 for l in open_loans if l.display_status() in ("Overdue", "Defaulted")),
+        }
+
     context = {
+        "loan_card": loan_card,
         "user": request.user,
         "member_count": Member.objects.count(),
         "active_member_count": Member.objects.filter(

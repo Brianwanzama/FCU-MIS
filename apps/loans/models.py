@@ -167,6 +167,13 @@ class Loan(models.Model):
         return self.application.reference
 
     @property
+    def disbursement_method_label(self):
+        try:
+            return LoanRepayment.Method(self.disbursement_method).label
+        except ValueError:
+            return self.disbursement_method
+
+    @property
     def total_due(self):
         return sum((i.amount_due for i in self.installments.all()), Decimal("0"))
 

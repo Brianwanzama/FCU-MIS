@@ -1,0 +1,27 @@
+[Unit]
+Description=FCU-MIS web application (gunicorn)
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+User=fcu
+Group=www-data
+WorkingDirectory=/opt/fcu-mis
+EnvironmentFile=/etc/fcu-mis/env
+RuntimeDirectory=fcu-mis
+RuntimeDirectoryMode=0750
+ExecStart=/opt/fcu-mis/venv/bin/gunicorn config.wsgi:application \
+    --bind unix:/run/fcu-mis/gunicorn.sock \
+    --workers 2 --timeout 60 --access-logfile - --error-logfile -
+Restart=on-failure
+RestartSec=3
+
+# Hardening: the app only needs its own folder and the data folder.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/lib/fcu-mis
+
+[Install]
+WantedBy=multi-user.target

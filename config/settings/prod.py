@@ -9,10 +9,13 @@ from .base import BASE_DIR, SECRET_KEY, env  # noqa: F401
 
 DEBUG = False
 
-if SECRET_KEY.startswith("unsafe") or len(SECRET_KEY) < 32:
+# The sample values in .env.example are public, so they must never be accepted.
+PLACEHOLDER_KEY_PREFIXES = ("unsafe", "change-me", "django-insecure", "changeme", "secret")
+
+if SECRET_KEY.lower().startswith(PLACEHOLDER_KEY_PREFIXES) or len(SECRET_KEY) < 50:
     raise ImproperlyConfigured(
-        "Set DJANGO_SECRET_KEY to a long random value (at least 32 characters) before "
-        "running in production."
+        "DJANGO_SECRET_KEY is missing, too short or still a sample value. Generate one with: "
+        "python -c \"import secrets; print(secrets.token_urlsafe(60))\""
     )
 
 # Railway domains, plus any custom domain listed in DJANGO_ALLOWED_HOSTS.
