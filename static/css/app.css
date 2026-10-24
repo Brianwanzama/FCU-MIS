@@ -111,3 +111,34 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   outline: 3px solid var(--fcu-gold-500);
   outline-offset: 2px;
 }
+
+/* ------------------------------------------------------------------
+   Charts. Series colours are the validated categorical slots 1-3
+   (blue, orange, aqua); status colours are the fixed status palette and
+   always appear with an icon and a text label, never colour alone.
+   ------------------------------------------------------------------ */
+:root {
+  --fcu-series-1: #2a78d6;
+  --fcu-series-2: #eb6834;
+  --fcu-series-3: #1baf7a;
+  --fcu-series-other: #9aa5a3;
+  --fcu-status-good: #0ca30c;
+  --fcu-status-warning: #fab219;
+  --fcu-status-critical: #d03b3b;
+  --fcu-chart-surface: #ffffff;
+  --fcu-chart-grid: #e6e9e8;
+  --fcu-chart-axis: #5b6c6a;
+}
+
+.fcu-chart-card .card-header { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; }
+.fcu-chart-box { position: relative; height: 280px; }
+.fcu-chart-box.tall { height: 460px; }
+.fcu-chart-box.short { height: 220px; }
+.fcu-chart-note { font-size: .8rem; color: var(--fcu-ink-muted); margin-top: .5rem; }
+.fcu-chart-table { font-size: .8rem; margin-top: .5rem; }
+.fcu-chart-table summary { cursor: pointer; color: var(--fcu-teal-700); }
+.fcu-chart-table table { width: 100%; margin-top: .4rem; }
+.fcu-chart-table th, .fcu-chart-table td { padding: .15rem .4rem; border-bottom: 1px solid var(--fcu-chart-grid); }
+.fcu-chart-table td:not(:first-child), .fcu-chart-table th:not(:first-child) { text-align: right; }
+.fcu-chart-empty { color: var(--fcu-ink-muted); text-align: center; padding: 3rem 1rem; }
+@media (max-width: 576px) { .fcu-chart-box { height: 240px; } .fcu-chart-box.tall { height: 420px; } }

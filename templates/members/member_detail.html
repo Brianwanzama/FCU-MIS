@@ -618,6 +618,12 @@
     {% endif %}
 
 
+    {% if chart_monthly %}
+    <div class="mb-4">
+        {% include "partials/chart_card.html" with chart_id="chart-member-monthly" kind="monthly" title="Deposits paid each month" data=chart_monthly note="Bars are what was paid for each month; the dashed line is the monthly savings target." size="short" %}
+    </div>
+    {% endif %}
+
     <!-- ===================================================== -->
     <!-- FCU MEMBER STATUS -->
     <!-- ===================================================== -->
@@ -1003,4 +1009,10 @@
 
 </div>
 
+{% endblock %}
+
+{% block extra_scripts %}
+{% load static %}
+<script src="{% static 'vendor/chart.umd.js' %}"></script>
+<script src="{% static 'js/fcu-charts.js' %}"></script>
 {% endblock %}

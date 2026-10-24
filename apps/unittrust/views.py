@@ -37,11 +37,20 @@ class PortfolioView(LoginRequiredMixin, View):
 
         user = request.user
 
+        from apps.reports.charts import investment_returns, portfolio_allocation
+
+        book = portfolio()
+        allocation = portfolio_allocation(book)
+        allocation["empty"] = "" if allocation["values"] else "No investments are held yet."
+        returns = investment_returns(book)
+        returns["empty"] = "" if returns["values"] else "Nothing has been invested yet."
+
         return render(
             request,
             "unittrust/portfolio.html",
             {
-                "book": portfolio(),
+                "charts": {"allocation": allocation, "returns": returns},
+                "book": book,
                 "mine": member_investment_summary(user.member) if user.member_id else None,
             },
         )

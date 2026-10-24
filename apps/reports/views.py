@@ -11,6 +11,7 @@ from apps.unittrust.models import InvestmentTransaction
 from apps.unittrust.services import portfolio
 
 from . import excel
+from .charts import member_progress, member_status, monthly_deposits, portfolio_allocation
 from .pdf import render_cycle_pdf
 from .services import cycle_report
 
@@ -49,7 +50,17 @@ class CycleReportView(ReportAccessMixin, View):
 
         cycle = get_object_or_404(_reportable_cycles(), pk=pk)
 
-        return render(request, "reports/cycle_report.html", {"report": cycle_report(cycle), "cycle": cycle})
+        report = cycle_report(cycle)
+
+        charts = {
+            "monthly": monthly_deposits(cycle),
+            "status": member_status(report["members"]),
+            "progress": member_progress(report["members"]),
+            "allocation": portfolio_allocation({"positions": report["investments"]["positions"]}),
+        }
+        charts["allocation"]["empty"] = "" if charts["allocation"]["values"] else "No investments are held yet."
+
+        return render(request, "reports/cycle_report.html", {"report": report, "cycle": cycle, "charts": charts})
 
 
 class CycleReportPDFView(ReportAccessMixin, View):

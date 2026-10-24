@@ -48,6 +48,15 @@
 </div>
 {% endif %}
 
+<div class="row g-3 mb-4">
+  <div class="col-lg-5">
+    {% include "partials/chart_card.html" with chart_id="chart-allocation" kind="allocation" title="Where the money is" data=charts.allocation empty=charts.allocation.empty note="Share of what the investments are worth now." %}
+  </div>
+  <div class="col-lg-7">
+    {% include "partials/chart_card.html" with chart_id="chart-returns" kind="returns" title="Total return on each investment" data=charts.returns empty=charts.returns.empty note="Earnings and growth in value, less fees, as a percentage of the money put in." %}
+  </div>
+</div>
+
 <div class="card fcu-card">
   <div class="table-responsive">
     <table class="table align-middle mb-0">
@@ -71,4 +80,10 @@
     </table>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+{% load static %}
+<script src="{% static 'vendor/chart.umd.js' %}"></script>
+<script src="{% static 'js/fcu-charts.js' %}"></script>
 {% endblock %}

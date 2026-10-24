@@ -20,6 +20,21 @@
 
 {% with c=report.contributions loans=report.loans inv=report.investments pos=report.position %}
 
+<div class="row g-3 mb-4 no-print">
+  <div class="col-lg-8">
+    {% include "partials/chart_card.html" with chart_id="chart-monthly" kind="monthly" title="Deposits collected each month" data=charts.monthly note="Bars are what was paid for each month; the dashed line is the monthly target for all eligible members." %}
+  </div>
+  <div class="col-lg-4">
+    {% include "partials/chart_card.html" with chart_id="chart-status" kind="status" title="Who has met the deposit target" data=charts.status %}
+  </div>
+  <div class="col-lg-8">
+    {% include "partials/chart_card.html" with chart_id="chart-progress" kind="progress" size="tall" title="Deposits paid by each member" data=charts.progress note="Each bar is the member's deposit target: the blue part is paid, the grey part is still to pay. Click a bar to open the member." %}
+  </div>
+  <div class="col-lg-4">
+    {% include "partials/chart_card.html" with chart_id="chart-allocation" kind="allocation" title="Where the investments are" data=charts.allocation empty=charts.allocation.empty %}
+  </div>
+</div>
+
 <h2 class="h5">1. Contributions</h2>
 <div class="card fcu-card mb-4"><div class="table-responsive"><table class="table mb-0">
   <thead><tr><th></th><th class="text-end">Target</th><th class="text-end">Collected</th><th class="text-end">Outstanding</th><th class="text-end">Rate</th></tr></thead>
@@ -66,4 +81,10 @@
   {% endfor %}
   </tbody></table></div></div>
 {% endwith %}
+{% endblock %}
+
+{% block extra_scripts %}
+{% load static %}
+<script src="{% static 'vendor/chart.umd.js' %}"></script>
+<script src="{% static 'js/fcu-charts.js' %}"></script>
 {% endblock %}
