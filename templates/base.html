@@ -15,6 +15,18 @@
   {% include "partials/nav.html" %}
   <hr class="fcu-brand-rule m-0">
 
+  {% if request.session.impersonator_id %}
+    <div class="bg-warning-subtle border-bottom border-warning py-2">
+      <div class="container d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <span>You are signed in as <strong>{{ user.username }}</strong> (administrator view). Actions are recorded against this member.</span>
+        <form method="post" action="{% url 'accounts:impersonate_stop' %}" class="m-0">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-sm btn-dark">Back to my account</button>
+        </form>
+      </div>
+    </div>
+  {% endif %}
+
   <main class="container py-4">
     {% if messages %}
       {% for message in messages %}

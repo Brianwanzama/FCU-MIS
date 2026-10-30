@@ -46,4 +46,10 @@ urlpatterns = [
     # --- admin-only user/role management (FR-14, FR-3.2) ---
     path("users/", views.UserManagementView.as_view(), name="user_management"),
     path("users/<int:pk>/role/", views.ChangeUserRoleView.as_view(), name="change_role"),
+    path("users/<int:pk>/temporary-password/", views.SetTemporaryPasswordView.as_view(), name="temporary_password"),
+    path("users/<int:pk>/require-password-change/", views.RequirePasswordChangeView.as_view(), name="require_password_change"),
+    path("users/require-password-change/", views.RequirePasswordChangeView.as_view(), name="require_password_change_all"),
+    path("users/<int:pk>/sign-in-as/", views.impersonate_start, name="impersonate_start"),
+    path("sign-in-as/stop/", views.impersonate_stop, name="impersonate_stop"),
+    path("password/change/", views.ChangePasswordView.as_view(), name="password_change"),
 ]

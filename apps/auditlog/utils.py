@@ -27,6 +27,12 @@ def log_action(action, instance=None, old_value=None, new_value=None, actor=None
         object_id = object_id or str(getattr(instance, "pk", ""))
         object_repr = object_repr or str(instance)
 
+    if request is not None and getattr(request, "session", None) is not None:
+        impersonator_id = request.session.get("impersonator_id")
+        if impersonator_id:
+            new_value = dict(new_value) if isinstance(new_value, dict) else {"value": new_value} if new_value else {}
+            new_value["impersonated_by_user_id"] = impersonator_id
+
     AuditLog.objects.create(
         actor=actor,
         action=action,

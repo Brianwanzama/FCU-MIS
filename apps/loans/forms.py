@@ -1,5 +1,7 @@
 from django import forms
 
+from apps.members.models import Member
+
 from .models import LoanApplication
 
 
@@ -128,4 +130,44 @@ class ReversalReasonForm(forms.Form, _Styled):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.style()
+
+
+
+class OffsystemLoanForm(forms.Form, _Styled):
+    """An officer adds a loan that was made and managed outside the system."""
+
+    member = forms.ModelChoiceField(queryset=Member.objects.none(), label="Member")
+    principal = forms.DecimalField(label="Amount lent (UGX)", min_value=1, max_digits=12, decimal_places=0)
+    period_months = forms.IntegerField(label="Repayment period (months)", min_value=1, max_value=36, initial=3)
+    interest_rate_percent = forms.DecimalField(
+        label="Interest per month (%)", min_value=0, max_digits=5, decimal_places=2, initial=5,
+        help_text="On the declining balance, as FCU loans normally are.",
+    )
+    disbursed_on = forms.DateField(
+        label="Date the loan was given", widget=forms.DateInput(attrs={"type": "date"}),
+    )
+    payment_method = forms.ChoiceField(
+        label="Paid out by",
+        choices=[("CASH", "Cash"), ("BANK", "Bank Transfer"), ("MOBILE_MONEY", "Mobile Money")],
+    )
+    reference = forms.CharField(required=False, max_length=100, label="Reference")
+    already_repaid = forms.DecimalField(
+        required=False, min_value=0, max_digits=12, decimal_places=0, initial=0,
+        label="Already repaid so far (UGX)",
+        help_text="Everything the member has paid back already, so only the true balance remains.",
+    )
+    repaid_on = forms.DateField(
+        required=False, label="Date of that repayment",
+        widget=forms.DateInput(attrs={"type": "date"}),
+        help_text="Leave blank for today. Only needed if something was already repaid.",
+    )
+    note = forms.CharField(
+        required=False, widget=forms.Textarea(attrs={"rows": 2}), label="Notes",
+        help_text="Where the records are kept, who agreed the loan, anything the next officer should know.",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["member"].queryset = Member.objects.order_by("member_code")
         self.style()

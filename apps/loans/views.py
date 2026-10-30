@@ -15,6 +15,7 @@ from .forms import (
     DecisionForm,
     DisbursementForm,
     LoanApplicationForm,
+    OffsystemLoanForm,
     RepaymentForm,
     ReversalReasonForm,
     ReviewForm,
@@ -26,9 +27,14 @@ from .services import (
     approve_application,
     check_eligibility,
     current_undertaking,
+    delete_application,
+    delete_loan,
+    delete_repayment,
+    delete_undertaking,
     disburse_loan,
     loan_schedule,
     overdue_loans,
+    record_offsystem_loan,
     recovery_enabled,
     recovery_preview,
     record_repayment,
@@ -467,6 +473,7 @@ class LoanDetailView(LoanAccessMixin, View):
                 "is_owner": user.member_id == loan.member_id,
                 "can_record": user.has_financial_write_access and loan.status != Loan.Status.SETTLED,
                 "can_reverse": user.can_approve_loans,
+                "can_delete": user.can_delete_records,
                 "repayment_form": RepaymentForm(initial={"payment_date": today}),
                 "reversal_form": ReversalReasonForm(),
                 "preview": recovery_preview(loan) if loan.status != Loan.Status.SETTLED else None,
@@ -546,6 +553,7 @@ class LoanRegisterView(LoginRequiredMixin, View):
                 "overdue": [{"loan": loan, "preview": recovery_preview(loan)} for loan in overdue],
                 "recovery_enabled": recovery_enabled(),
                 "can_run": request.user.can_approve_loans,
+                "can_add_offsystem": request.user.can_record_offsystem_loans,
                 "today": today,
             },
         )
@@ -573,3 +581,114 @@ class RecoveryRunView(LoginRequiredMixin, View):
             )
 
         return redirect("loans:register")
+
+
+
+class OffsystemLoanCreateView(LoginRequiredMixin, View):
+    """Add a loan made outside the system (Treasurer, Chairperson or Administrator)."""
+
+    template_name = "loans/offsystem_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated and not request.user.can_record_offsystem_loans:
+            raise PermissionDenied("Only the Treasurer, Chairperson or Administrator can add loans made outside the system.")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request):
+        form = OffsystemLoanForm(initial={"disbursed_on": timezone.localdate()})
+        return render(request, self.template_name, {"form": form})
+
+    def post(self, request):
+        form = OffsystemLoanForm(request.POST)
+
+        if form.is_valid():
+            data = form.cleaned_data
+            try:
+                loan = record_offsystem_loan(
+                    request.user,
+                    data["member"],
+                    data["principal"],
+                    data["period_months"],
+                    data["disbursed_on"],
+                    rate_percent=data["interest_rate_percent"],
+                    method=data["payment_method"],
+                    reference=data["reference"],
+                    already_repaid=data["already_repaid"] or 0,
+                    repaid_on=data["repaid_on"],
+                    note=data["note"],
+                )
+            except LoanError as exc:
+                form.add_error(None, " ".join(_error_messages(exc)))
+            else:
+                messages.success(
+                    request,
+                    f"{loan.reference} added for {loan.member.member_code}. Balance: UGX {loan.outstanding:,.0f}.",
+                )
+                return redirect("loans:loan", pk=loan.pk)
+
+        return render(request, self.template_name, {"form": form})
+
+
+class _DeleteView(LoginRequiredMixin, View):
+    http_method_names = ["post"]
+
+    def reason(self, request):
+        form = ReversalReasonForm(request.POST)
+        return form.cleaned_data["reason"] if form.is_valid() else ""
+
+
+class RepaymentDeleteView(_DeleteView):
+    def post(self, request, pk):
+        repayment = get_object_or_404(LoanRepayment, pk=pk)
+        loan_id = repayment.loan_id
+
+        try:
+            delete_repayment(repayment, request.user, self.reason(request))
+        except LoanError as exc:
+            messages.error(request, " ".join(_error_messages(exc)))
+        else:
+            messages.success(request, "Deleted. The loan balance has been recalculated.")
+
+        return redirect("loans:loan", pk=loan_id)
+
+
+class LoanDeleteView(_DeleteView):
+    def post(self, request, pk):
+        loan = get_object_or_404(Loan, pk=pk)
+
+        try:
+            delete_loan(loan, request.user, self.reason(request))
+        except LoanError as exc:
+            messages.error(request, " ".join(_error_messages(exc)))
+            return redirect("loans:loan", pk=pk)
+
+        messages.success(request, "Loan deleted. A copy is kept in the audit log.")
+        return redirect("loans:register")
+
+
+class ApplicationDeleteView(_DeleteView):
+    def post(self, request, pk):
+        application = get_object_or_404(LoanApplication, pk=pk)
+
+        try:
+            delete_application(application, request.user, self.reason(request))
+        except LoanError as exc:
+            messages.error(request, " ".join(_error_messages(exc)))
+            return redirect("loans:detail", pk=pk)
+
+        messages.success(request, "Application deleted. A copy is kept in the audit log.")
+        return redirect("loans:applications")
+
+
+class UndertakingDeleteView(_DeleteView):
+    def post(self, request, pk):
+        undertaking = get_object_or_404(SignedUndertaking, pk=pk)
+
+        try:
+            delete_undertaking(undertaking, request.user, self.reason(request))
+        except LoanError as exc:
+            messages.error(request, " ".join(_error_messages(exc)))
+        else:
+            messages.success(request, "Declaration deleted.")
+
+        return redirect("loans:undertakings")

@@ -92,10 +92,16 @@ is recommended before Phase 2 — flag if you'd like that added now rather than 
 | Request a reversal | yes | yes | yes | no |
 | Approve / reject a reversal | yes | no | yes | no |
 
-- Financial records are never deleted (Django admin delete is disabled too). A
-  reversal is requested with a reason and takes effect only when someone *other than
-  the requester* approves it. The payment then stops counting towards balances but
-  stays in the register and the audit history.
+- A **reversal** is requested with a reason and takes effect only when someone *other
+  than the requester* approves it. The payment then stops counting towards balances but
+  stays in the register and the audit history. A wrongly entered payment can also simply
+  be **deleted** (Delete button): the Treasurer, Chairperson or Administrator gives a
+  reason, the entry leaves the register and every balance, and a full copy of it, with
+  who deleted it, when and why, stays in the audit log. Closed-cycle payments cannot be
+  deleted until the cycle is reopened.
+- **Quick amounts:** the entry form has a "Quick amount" list that follows the payment type
+  (deposits in UGX 100,000 steps up to 600,000; emergency in UGX 5,000 steps up to 30,000).
+  The amount box stays editable for part payments.
 - Every edit records old value, new value, user, time and reason; balances recalculate.
 - Contributions in a closed cycle cannot be edited or reversed until an Administrator
   reopens the cycle. A payment with a reversal pending cannot be edited.
@@ -195,11 +201,21 @@ Run `python manage.py migrate`: adds `loans.0001` and `contributions.0004`.
 - **Effect on status (4.6(d)):** if the recovery leaves the member below the deposits
   required for the cycle to date, they become Inactive ("Loan recovered from
   contributions") until they pay back up, then Active again automatically.
-- **Scheduled job:** run `python manage.py recover_overdue_loans` daily (Railway cron or
-  similar). It needs nobody logged in. It is **off until FCU approves the policy**: set
-  `FCU_LOAN_AUTO_RECOVERY_ENABLED=True` (and `FCU_LOAN_RECOVERY_POLICY_REF`, e.g. the
-  General Meeting resolution). Until then the command only prints a dry run of what it
-  would recover. `--dry-run` is always available.
+- **Automatic daily check:** recovery is **on by default** (`FCU_LOAN_AUTO_RECOVERY_ENABLED`,
+  set it to `False` to switch it off; `FCU_LOAN_RECOVERY_POLICY_REF` names the authority
+  written to the audit log). The check runs by itself the first time anyone signs in each
+  day, so no scheduler is needed, and it is recorded once per day (`RecoveryRun`), however
+  many servers or visits there are. `python manage.py recover_overdue_loans` (Railway cron
+  or similar) does the same work and is still fine to schedule; `--dry-run` only reports.
+  Disable the on-visit trigger with `FCU_LOAN_RECOVERY_ON_REQUEST=False`.
+- **Loans made outside the system:** the Treasurer, Chairperson or Administrator adds a
+  loan from **Loan register -> Add loan made outside the system**: member, amount, period,
+  interest, date given and anything already repaid. The system builds the schedule, so the
+  balance, overdue status, the member's loan limit and automatic recovery all work for it.
+- **Deleting:** wrongly entered repayments, recoveries, loans, applications and declarations
+  can be deleted by the Treasurer, Chairperson or Administrator with a reason. Deleting a
+  loan reopens its application as Approved; deleting a recovery gives the savings back. A
+  copy of everything deleted stays in the audit log.
 - Run `python manage.py migrate`: adds `loans.0002` and `members.0005`.
 
 ## Investments and profit distribution (Manual v3.0, sections 7 and 8)
@@ -208,7 +224,9 @@ Run `python manage.py migrate`: adds `loans.0001` and `contributions.0004`.
   ventures and real estate, registered in FCU's name. The Treasurer or Administrator
   records money invested, money returned, earnings received, fees and market value
   updates. Reversing a transaction needs the Administrator or Chairperson (not the
-  recorder) and a reason; records are never deleted.
+  recorder) and a reason. Transactions, whole investments and profit distributions can
+  also be **deleted** (reason required, copy kept in the audit log); the position is
+  recalculated.
 - **Position** per investment: invested, worth now (latest valuation, or what is still
   in it), earnings, and total return. **Every member** sees the portfolio totals and
   their own indicative share (their accumulated deposits as a share of all members'
@@ -223,6 +241,24 @@ Run `python manage.py migrate`: adds `loans.0001` and `contributions.0004`.
 - Member dashboard: net position = deposits + bonuses received - loan balance. A share
   of the investments is shown for information but not added (it is funded by the deposits).
 - Run `python manage.py migrate`: adds `unittrust.0001`.
+
+## Accounts, roles and passwords
+
+- **More than one role:** on *Users & Roles* the Administrator picks a main role and ticks
+  any "also acts as" roles (for example a Chairperson who is also Treasurer). A person
+  gets the permissions of every role they hold.
+- **Sign in as a member:** the Administrator can sign in as any other user to see exactly
+  what they see ("Sign in as this user"). A banner shows the Administrator is in someone
+  else's account with a "Back to my account" button; it is audited, and cannot be used
+  to enter another Administrator's account.
+- **Passwords:** every user can change their own password (*Change password* in the menu).
+  The Administrator can *Set a temporary password* (shown once, works without email) or
+  *Ask to change password* for one user or for everyone; flagged users must choose a new
+  password before they can use the system.
+- **Delete everywhere:** contributions, loan records, investments, profit distributions,
+  documents and members (a member with no financial history) can be deleted; a copy goes
+  to the audit log. Cycles already had a guarded delete.
+- Run `python manage.py migrate`: adds `accounts.0005` and `loans.0003`.
 
 ## Reports and Excel exports (Manual 10.2)
 

@@ -79,9 +79,9 @@ class PreflightTests(TestCase):
 
     def test_reports_the_recovery_gate(self):
         User.objects.create_user(username="a", password="x", role=User.Role.ADMINISTRATOR)
-        self.assertIn("recovery is OFF", self.run_preflight()[1])
-        with override_settings(FCU_LOAN_AUTO_RECOVERY_ENABLED=True):
-            self.assertIn("recovery is ON", self.run_preflight()[1])
+        self.assertIn("recovery is ON", self.run_preflight()[1])
+        with override_settings(FCU_LOAN_AUTO_RECOVERY_ENABLED=False):
+            self.assertIn("recovery is OFF", self.run_preflight()[1])
 
 
 class SeedDemoTests(TestCase):

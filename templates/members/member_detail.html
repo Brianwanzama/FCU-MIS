@@ -1003,6 +1003,16 @@
 
             </div>
 
+            {% if user.has_full_access and not viewing_own %}
+            <form method="post" action="{% url 'members:delete' member.member_code %}"
+                  class="d-flex flex-wrap gap-2 mt-3"
+                  onsubmit="return confirm('Delete this member? This only works for a member with no financial records.');">
+                {% csrf_token %}
+                <input type="text" name="reason" class="form-control" style="max-width:22rem" placeholder="Reason for deleting this member" required>
+                <button type="submit" class="btn btn-danger">Delete member</button>
+            </form>
+            {% endif %}
+
         </div>
 
     </div>

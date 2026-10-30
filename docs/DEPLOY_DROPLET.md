@@ -76,9 +76,10 @@ sudo /opt/fcu-mis/deploy/update.sh          # takes a backup, pulls main, migrat
 
 ## 6. Loan recovery
 
-`fcu-recover-loans.timer` runs `recover_overdue_loans` every day at 01:30. It only reports what it would
-do until FCU approves the policy. Then set `FCU_LOAN_AUTO_RECOVERY_ENABLED=True` and
-`FCU_LOAN_RECOVERY_POLICY_REF=<the resolution>` in `/etc/fcu-mis/env` and `systemctl restart fcu-mis`.
+`fcu-recover-loans.timer` runs `recover_overdue_loans` every day at 01:30. Automatic recovery is on by default
+(and also runs by itself the first time anyone signs in each day). To change the authority written to the audit
+log, set `FCU_LOAN_RECOVERY_POLICY_REF=<the resolution>` in `/etc/fcu-mis/env`; to switch recovery off set
+`FCU_LOAN_AUTO_RECOVERY_ENABLED=False`; then `systemctl restart fcu-mis`.
 See what ran: `journalctl -u fcu-recover-loans`.
 
 ## 7. Everyday commands

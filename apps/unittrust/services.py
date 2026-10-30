@@ -210,6 +210,107 @@ def reverse_transaction(entry, actor, reason):
     return entry
 
 
+def _delete_reason(reason):
+    reason = (reason or "").strip()
+    if not reason:
+        raise InvestmentError("Give a reason for the deletion.")
+    return reason
+
+
+@transaction.atomic
+def delete_transaction(entry, actor, reason):
+    """
+    Delete a wrongly entered investment transaction. A copy (who, when, why, the
+    figures) stays in the audit log; the investment's position is recalculated.
+    """
+
+    _require(actor, "can_delete_records", "delete investment transactions")
+    reason = _delete_reason(reason)
+
+    entry = InvestmentTransaction.objects.select_related("investment").get(pk=entry.pk)
+
+    log_action(
+        AuditLog.Action.DELETE,
+        instance=entry,
+        actor=actor,
+        old_value={
+            "investment": entry.investment.name,
+            "kind": entry.kind,
+            "amount": str(entry.amount),
+            "transaction_date": entry.transaction_date.isoformat(),
+            "reference": entry.reference,
+            "notes": entry.notes,
+            "reversed": entry.reversed_at is not None,
+        },
+        new_value={"event": "INVESTMENT_TRANSACTION_DELETED", "reason": reason},
+    )
+    entry.delete()
+
+
+@transaction.atomic
+def delete_investment(investment, actor, reason):
+    """Delete an investment together with its transactions (kept in the audit log)."""
+
+    _require(actor, "can_delete_records", "delete investments")
+    reason = _delete_reason(reason)
+
+    entries = list(investment.transactions.all())
+
+    log_action(
+        AuditLog.Action.DELETE,
+        instance=investment,
+        actor=actor,
+        old_value={
+            "name": investment.name,
+            "kind": investment.kind,
+            "provider": investment.provider,
+            "account_reference": investment.account_reference,
+            "opened_on": investment.opened_on.isoformat(),
+            "status": investment.status,
+            "transactions": [
+                {
+                    "kind": t.kind,
+                    "amount": str(t.amount),
+                    "transaction_date": t.transaction_date.isoformat(),
+                    "reversed": t.reversed_at is not None,
+                }
+                for t in entries
+            ],
+        },
+        new_value={"event": "INVESTMENT_DELETED", "reason": reason},
+    )
+
+    investment.transactions.all().delete()
+    investment.delete()
+
+
+@transaction.atomic
+def delete_distribution(distribution, actor, reason):
+    """Delete a profit distribution and its member shares (kept in the audit log)."""
+
+    _require(actor, "can_delete_records", "delete profit distributions")
+    reason = _delete_reason(reason)
+
+    distribution = ProfitDistribution.objects.get(pk=distribution.pk)
+
+    log_action(
+        AuditLog.Action.DELETE,
+        instance=distribution,
+        actor=actor,
+        old_value={
+            "description": distribution.description,
+            "total_amount": str(distribution.total_amount),
+            "status": distribution.status,
+            "lines": [
+                {"member": l.member.member_code, "amount": str(getattr(l, "amount", ""))}
+                for l in distribution.lines.select_related("member")
+            ],
+        },
+        new_value={"event": "DISTRIBUTION_DELETED", "reason": reason},
+    )
+    distribution.delete()
+
+
 @transaction.atomic
 def close_investment(investment, actor, note=""):
     _require(actor, "has_chairperson_access", "close investments")

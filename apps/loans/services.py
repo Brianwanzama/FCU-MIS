@@ -21,7 +21,14 @@ from apps.cycles.services import get_active_cycle
 from apps.members.models import Member
 from apps.members.services import member_available_savings
 
-from .models import Loan, LoanApplication, LoanInstallment, LoanRepayment, SignedUndertaking
+from .models import (
+    Loan,
+    LoanApplication,
+    LoanInstallment,
+    LoanRepayment,
+    RecoveryRun,
+    SignedUndertaking,
+)
 
 ALLOWED_UPLOADS = {
     ".pdf": (b"%PDF",),
@@ -847,6 +854,284 @@ def reverse_repayment(repayment, actor, reason):
 
 
 # ============================================================
+# Loans made outside the system
+# ============================================================
+
+MAX_OFFSYSTEM_MONTHS = 36
+
+
+@transaction.atomic
+def record_offsystem_loan(
+    actor, member, principal, months, disbursed_on, rate_percent=None,
+    method=LoanRepayment.Method.CASH, reference="", already_repaid=0, repaid_on=None, note="",
+):
+    """
+    Add a loan that was made and is managed outside the system (before it was
+    introduced, or never through an application). The Treasurer, Chairperson or
+    Administrator enters the original terms; the system builds the same
+    repayment schedule it would have, so the balance, the overdue status and the
+    automatic recovery all work for it. Anything already repaid is recorded as a
+    repayment so that only the true balance remains.
+    """
+
+    _require(actor, "can_record_offsystem_loans", "add loans made outside the system")
+
+    principal = Decimal(principal)
+    already_repaid = Decimal(already_repaid or 0)
+    rate = Decimal(str(settings.FCU_DEFAULT_LOAN_INTEREST_PERCENT if rate_percent in (None, "") else rate_percent))
+    today = timezone.localdate()
+
+    if principal <= 0:
+        raise LoanError("The loan amount must be greater than zero.")
+
+    if not 1 <= int(months) <= MAX_OFFSYSTEM_MONTHS:
+        raise LoanError(f"The repayment period must be between 1 and {MAX_OFFSYSTEM_MONTHS} months.")
+
+    if rate < 0:
+        raise LoanError("The interest rate cannot be negative.")
+
+    if disbursed_on > today:
+        raise LoanError("The loan date cannot be in the future.")
+
+    if method not in LoanRepayment.Method.values:
+        raise LoanError("Choose how the money was paid out.")
+
+    cycle = get_active_cycle()
+
+    if cycle is None:
+        raise LoanError("There is no ACTIVE cycle to record this loan against.")
+
+    schedule = loan_schedule(principal, int(months), disbursed_on, rate)
+    total_due = sum((row["instalment"] for row in schedule), Decimal("0"))
+
+    if already_repaid < 0 or already_repaid > total_due:
+        raise LoanError(f"Amount already repaid must be between 0 and UGX {total_due:,.0f} (the total due).")
+
+    repaid_on = repaid_on or today
+
+    if already_repaid > 0 and not (disbursed_on <= repaid_on <= today):
+        raise LoanError("The date of the repayments must be after the loan date and not in the future.")
+
+    loan = Loan.objects.create(
+        application=None,
+        is_offsystem=True,
+        offsystem_note=(note or "").strip(),
+        member=member,
+        cycle=cycle,
+        principal=principal,
+        interest_rate_percent=rate,
+        period_months=int(months),
+        disbursed_on=disbursed_on,
+        disbursed_by=actor,
+        disbursement_method=method,
+        disbursement_reference=(reference or "").strip(),
+    )
+
+    LoanInstallment.objects.bulk_create(
+        LoanInstallment(
+            loan=loan,
+            number=row["number"],
+            due_date=row["due_date"],
+            principal_due=row["principal"],
+            interest_due=row["interest"],
+            amount_due=row["instalment"],
+        )
+        for row in schedule
+    )
+
+    if already_repaid > 0:
+        LoanRepayment.objects.create(
+            loan=loan,
+            kind=LoanRepayment.Kind.PAYMENT,
+            amount=already_repaid,
+            payment_date=repaid_on,
+            payment_method=method,
+            reference="Repaid before it was added to the system",
+            cycle=cycle,
+            recorded_by=actor,
+        )
+
+    remaining = rebuild_allocation(loan)
+
+    log_action(
+        AuditLog.Action.CREATE,
+        instance=loan,
+        actor=actor,
+        new_value={
+            "event": "OFFSYSTEM_LOAN_ADDED",
+            "member": member.member_code,
+            "principal": str(principal),
+            "interest_rate_percent": str(rate),
+            "period_months": int(months),
+            "disbursed_on": disbursed_on.isoformat(),
+            "already_repaid": str(already_repaid),
+            "outstanding": str(remaining),
+            "note": loan.offsystem_note,
+        },
+    )
+
+    return loan
+
+
+# ============================================================
+# Deleting wrongly entered records
+# ============================================================
+
+def _delete_reason(reason):
+    reason = (reason or "").strip()
+    if not reason:
+        raise LoanError("Give a reason for the deletion.")
+    return reason
+
+
+@transaction.atomic
+def delete_repayment(repayment, actor, reason):
+    """Delete a repayment or recovery. The loan balance is restored; a copy stays in the audit log."""
+
+    _require(actor, "can_delete_records", "delete loan repayments")
+    reason = _delete_reason(reason)
+
+    repayment = LoanRepayment.objects.select_for_update().select_related("loan__member").get(pk=repayment.pk)
+    loan = repayment.loan
+
+    log_action(
+        AuditLog.Action.DELETE,
+        instance=repayment,
+        actor=actor,
+        old_value={
+            "loan": loan.reference,
+            "kind": repayment.kind,
+            "amount": str(repayment.amount),
+            "payment_date": repayment.payment_date.isoformat(),
+            "reference": repayment.reference,
+            "reversed": repayment.reversed_at is not None,
+        },
+        new_value={"event": "LOAN_REPAYMENT_DELETED", "reason": reason},
+    )
+
+    was_recovery = repayment.kind == LoanRepayment.Kind.SAVINGS_OFFSET
+    repayment.delete()
+    rebuild_allocation(loan)
+
+    if was_recovery:
+        from apps.members.services import reassess_after_loan_recovery
+
+        reassess_after_loan_recovery(loan.member, actor=actor)
+
+
+@transaction.atomic
+def delete_loan(loan, actor, reason):
+    """
+    Delete a loan with its schedule and repayments. If it came from an approved
+    application, that application goes back to Approved so it can be disbursed
+    again. A full copy stays in the audit log.
+    """
+
+    _require(actor, "can_delete_records", "delete loans")
+    reason = _delete_reason(reason)
+
+    loan = Loan.objects.select_for_update(of=("self",)).select_related("member", "application").get(pk=loan.pk)
+    repayments = list(loan.repayments.all())
+    had_recovery = any(r.kind == LoanRepayment.Kind.SAVINGS_OFFSET for r in repayments)
+
+    log_action(
+        AuditLog.Action.DELETE,
+        instance=loan,
+        actor=actor,
+        old_value={
+            "member": loan.member.member_code,
+            "principal": str(loan.principal),
+            "interest_rate_percent": str(loan.interest_rate_percent),
+            "period_months": loan.period_months,
+            "disbursed_on": loan.disbursed_on.isoformat(),
+            "status": loan.status,
+            "offsystem": loan.is_offsystem,
+            "repayments": [
+                {"kind": r.kind, "amount": str(r.amount), "date": r.payment_date.isoformat(),
+                 "reversed": r.reversed_at is not None}
+                for r in repayments
+            ],
+        },
+        new_value={"event": "LOAN_DELETED", "reason": reason},
+    )
+
+    member = loan.member
+    application = loan.application
+
+    loan.repayments.all().delete()
+    loan.installments.all().delete()
+    loan.delete()
+
+    if application is not None:
+        application.status = LoanApplication.Status.APPROVED
+        application.save(update_fields=["status"])
+
+    if had_recovery:
+        from apps.members.services import reassess_after_loan_recovery
+
+        reassess_after_loan_recovery(member, actor=actor)
+
+
+@transaction.atomic
+def delete_application(application, actor, reason):
+    """Delete a loan application and its uploaded form. A paid-out application must have its loan deleted first."""
+
+    _require(actor, "can_delete_records", "delete loan applications")
+    reason = _delete_reason(reason)
+
+    application = LoanApplication.objects.select_for_update().get(pk=application.pk)
+
+    if Loan.objects.filter(application=application).exists():
+        raise LoanError("This application has been paid out. Delete its loan first.")
+
+    log_action(
+        AuditLog.Action.DELETE,
+        instance=application,
+        actor=actor,
+        old_value={
+            "member": application.member.member_code,
+            "amount_requested": str(application.amount_requested),
+            "period_months": application.period_months,
+            "status": application.status,
+        },
+        new_value={"event": "LOAN_APPLICATION_DELETED", "reason": reason},
+    )
+
+    form_file = application.application_form
+    application.delete()
+
+    if form_file:
+        form_file.delete(save=False)
+
+
+@transaction.atomic
+def delete_undertaking(undertaking, actor, reason):
+    """Delete an uploaded Declaration that no loan application depends on."""
+
+    _require(actor, "can_delete_records", "delete declarations")
+    reason = _delete_reason(reason)
+
+    undertaking = SignedUndertaking.objects.select_for_update().get(pk=undertaking.pk)
+
+    if undertaking.applications.exists():
+        raise LoanError("A loan application is based on this declaration, so it cannot be deleted.")
+
+    log_action(
+        AuditLog.Action.DELETE,
+        instance=undertaking,
+        actor=actor,
+        old_value={"member": undertaking.member.member_code, "status": undertaking.status},
+        new_value={"event": "DECLARATION_DELETED", "reason": reason},
+    )
+
+    stored = undertaking.file
+    undertaking.delete()
+
+    if stored:
+        stored.delete(save=False)
+
+
+# ============================================================
 # Overdue loans and automatic recovery (Manual 4.6, 4.7)
 # ============================================================
 
@@ -1013,3 +1298,37 @@ def run_recovery(actor=None, today=None, dry_run=False):
             results.append(recover_loan_from_savings(loan, actor=actor, today=today))
 
     return results
+
+
+
+def run_daily_recovery_if_due(today=None):
+    """
+    The automatic daily check. Runs the recovery once per day, whoever triggers it
+    first (the first visit of the day, or the scheduled command). Returns the
+    day's RecoveryRun when this call did the work, otherwise None.
+    """
+
+    from django.db import IntegrityError
+
+    today = today or timezone.localdate()
+
+    try:
+        with transaction.atomic():
+            run, created = RecoveryRun.objects.get_or_create(run_date=today)
+    except IntegrityError:
+        return None
+
+    if not created:
+        return None
+
+    try:
+        results = run_recovery(actor=None, today=today, dry_run=not recovery_enabled())
+        run.loans_checked = len(results)
+        run.total_recovered = sum((r["recovered"] for r in results), Decimal("0"))
+    except Exception as exc:  # recorded, never allowed to break the page that triggered it
+        run.error = str(exc)[:1000]
+
+    run.finished_at = timezone.now()
+    run.save()
+
+    return run

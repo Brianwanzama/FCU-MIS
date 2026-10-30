@@ -46,6 +46,24 @@ class User(AbstractUser):
         default=Role.MEMBER,
     )
 
+    extra_roles = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "Additional roles held on top of the main role (for example an "
+            "Administrator who also acts as Treasurer). Permissions are the "
+            "union of every role held."
+        ),
+    )
+
+    must_change_password = models.BooleanField(
+        default=False,
+        help_text=(
+            "When set, the user is taken to the change-password page after "
+            "signing in and cannot use the system until a new password is set."
+        ),
+    )
+
     def __str__(self):
         if self.member:
             return (
@@ -61,24 +79,43 @@ class User(AbstractUser):
     # ==========================================================
 
     @property
+    def roles(self):
+        """Every role held: the main role plus any additional roles."""
+        held = {self.role}
+        held.update(r for r in (self.extra_roles or []) if r in self.Role.values)
+        return held
+
+    def has_role(self, *roles):
+        """True if the user holds any of the given roles (Administrator holds all)."""
+        held = self.roles
+        return self.Role.ADMINISTRATOR in held or any(r in held for r in roles)
+
+    @property
     def is_administrator(self):
-        return self.role == self.Role.ADMINISTRATOR
+        return self.Role.ADMINISTRATOR in self.roles
 
     @property
     def is_treasurer(self):
-        return self.role == self.Role.TREASURER
+        return self.Role.TREASURER in self.roles
 
     @property
     def is_secretary(self):
-        return self.role == self.Role.SECRETARY
+        return self.Role.SECRETARY in self.roles
 
     @property
     def is_chairperson(self):
-        return self.role == self.Role.CHAIRPERSON
+        return self.Role.CHAIRPERSON in self.roles
 
     @property
     def is_plain_member(self):
-        return self.role == self.Role.MEMBER
+        """Holds no office: only the Member role."""
+        return self.roles == {self.Role.MEMBER}
+
+    @property
+    def roles_display(self):
+        labels = dict(self.Role.choices)
+        ordered = [self.role] + sorted(r for r in self.roles if r != self.role)
+        return ", ".join(labels[r] for r in ordered)
 
     # ==========================================================
     # Permission Helpers
@@ -103,19 +140,12 @@ class User(AbstractUser):
         Record contributions, loans, repayments,
         expenses and unit trust transactions.
         """
-        return self.role in (
-            self.Role.ADMINISTRATOR,
-            self.Role.TREASURER,
-        )
+        return self.has_role(self.Role.ADMINISTRATOR, self.Role.TREASURER)
 
     @property
     def has_financial_view_access(self):
         """View every member's financial records (contribution register)."""
-        return self.role in (
-            self.Role.ADMINISTRATOR,
-            self.Role.TREASURER,
-            self.Role.CHAIRPERSON,
-        )
+        return self.has_role(self.Role.ADMINISTRATOR, self.Role.TREASURER, self.Role.CHAIRPERSON)
 
     def can_view_member_finances(self, member):
         """
@@ -138,12 +168,24 @@ class User(AbstractUser):
         return self.has_financial_view_access
 
     @property
+    def can_delete_records(self):
+        """Delete a wrongly entered record (kept in the audit log with the reason)."""
+        return self.has_role(self.Role.TREASURER, self.Role.CHAIRPERSON)
+
+    @property
+    def can_record_offsystem_loans(self):
+        """Add a loan that was made outside the system."""
+        return self.has_role(self.Role.TREASURER, self.Role.CHAIRPERSON)
+
+    @property
+    def can_impersonate(self):
+        """Sign in as another member to see exactly what they see."""
+        return self.role == self.Role.ADMINISTRATOR or self.is_superuser
+
+    @property
     def can_approve_reversal(self):
         """Approve or reject a reversal request. The Treasurer cannot."""
-        return self.role in (
-            self.Role.ADMINISTRATOR,
-            self.Role.CHAIRPERSON,
-        )
+        return self.has_role(self.Role.ADMINISTRATOR, self.Role.CHAIRPERSON)
 
     @property
     def can_approve_loans(self):
@@ -153,12 +195,7 @@ class User(AbstractUser):
     @property
     def can_verify_undertakings(self):
         """Check a member's signed Declaration and Commitment Agreement."""
-        return self.role in (
-            self.Role.ADMINISTRATOR,
-            self.Role.TREASURER,
-            self.Role.CHAIRPERSON,
-            self.Role.SECRETARY,
-        )
+        return self.has_role(self.Role.ADMINISTRATOR, self.Role.TREASURER, self.Role.CHAIRPERSON, self.Role.SECRETARY)
 
     @property
     def has_secretariat_access(self):
@@ -166,29 +203,18 @@ class User(AbstractUser):
         Member administration, correspondence,
         meeting records and document management.
         """
-        return self.role in (
-            self.Role.ADMINISTRATOR,
-            self.Role.SECRETARY,
-        )
+        return self.has_role(self.Role.ADMINISTRATOR, self.Role.SECRETARY)
 
     @property
     def has_chairperson_access(self):
         """
         Chairperson approvals and executive actions.
         """
-        return self.role in (
-            self.Role.ADMINISTRATOR,
-            self.Role.CHAIRPERSON,
-        )
+        return self.has_role(self.Role.ADMINISTRATOR, self.Role.CHAIRPERSON)
 
     @property
     def has_reports_access(self):
         """
         Access organisation-wide reports.
         """
-        return self.role in (
-            self.Role.ADMINISTRATOR,
-            self.Role.TREASURER,
-            self.Role.SECRETARY,
-            self.Role.CHAIRPERSON,
-        )
+        return self.has_role(self.Role.ADMINISTRATOR, self.Role.TREASURER, self.Role.SECRETARY, self.Role.CHAIRPERSON)

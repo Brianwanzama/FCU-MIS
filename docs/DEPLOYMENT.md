@@ -33,7 +33,7 @@ cannot be checked from outside Railway is listed under "Only you can verify".
 | `EMAIL_BACKEND` | `django.core.mail.backends.smtp.EmailBackend` |
 | `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL` | your mail provider. Without these, password-reset emails never reach members. |
 | `FCU_LOAN_LIMIT_PERCENT` | `100` (FCU decision) |
-| `FCU_LOAN_AUTO_RECOVERY_ENABLED` | leave `False` until FCU approves the recovery policy |
+| `FCU_LOAN_AUTO_RECOVERY_ENABLED` | `True` (default): overdue loans are recovered from savings automatically; `False` switches it off |
 | `FCU_LOAN_RECOVERY_POLICY_REF` | the authority, e.g. the General Meeting resolution |
 
 The cron service needs the same variables as the web service (use Railway's shared variables).
@@ -80,12 +80,14 @@ production storage, and the whole test suite against PostgreSQL 16.
 - Members' national ID numbers and signed forms are personal data: limit who has Railway
   and GitHub access.
 
-## 6. Switching on automatic loan recovery
+## 6. Automatic loan recovery
 
-1. FCU confirms the policy (General Meeting resolution).
-2. Set `FCU_LOAN_RECOVERY_POLICY_REF` to the resolution, then `FCU_LOAN_AUTO_RECOVERY_ENABLED=True`.
-3. Look at the Loan Register: it shows what each overdue loan would recover.
-4. The daily cron job now recovers for real. Every recovery is in the audit log.
+1. It is **on by default**: the first time anyone signs in each day the system checks for loans past their
+   agreed repayment period and recovers what is owed from the member's deposits (emergency excluded).
+   No scheduler is needed; a Railway cron running `python manage.py recover_overdue_loans` is optional.
+2. Set `FCU_LOAN_RECOVERY_POLICY_REF` to the General Meeting resolution so it is written to the audit log.
+3. The Loan Register shows what each overdue loan would recover. Every recovery is in the audit log.
+4. To switch it off set `FCU_LOAN_AUTO_RECOVERY_ENABLED=False`.
 
 ## 7. Only you can verify
 

@@ -38,6 +38,14 @@
                         formaction="{% url 'loans:undertaking_review' u.pk 'reject' %}">Reject</button>
               </form>
             {% endif %}
+            {% if user.can_delete_records %}
+              <form method="post" class="d-inline-flex gap-1 mt-1" action="{% url 'loans:undertaking_delete' u.pk %}"
+                    onsubmit="return confirm('Delete this declaration?');">
+                {% csrf_token %}
+                <input type="text" name="reason" class="form-control form-control-sm" placeholder="Reason" required>
+                <button class="btn btn-sm btn-danger" type="submit">Delete</button>
+              </form>
+            {% endif %}
           </td>
         </tr>
       {% empty %}

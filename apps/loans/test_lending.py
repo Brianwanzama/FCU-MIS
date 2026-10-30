@@ -278,7 +278,14 @@ class OverdueAndRecoveryTests(LendingCase):
         self.assertEqual(more["recovered"], Decimal("50000"))
 
     # ---- the scheduled job and the policy gate -------------------------------------
-    def test_automatic_recovery_is_off_by_default_and_refuses_to_run(self):
+    def test_recovery_is_on_by_default_and_refuses_to_run_only_when_switched_off(self):
+        from django.conf import settings
+
+        self.assertTrue(settings.FCU_LOAN_AUTO_RECOVERY_ENABLED)
+        with override_settings(FCU_LOAN_AUTO_RECOVERY_ENABLED=False):
+            self.check_refuses_when_off()
+
+    def check_refuses_when_off(self):
         loan = self.make_loan("300000")
         with self.assertRaises(services.LoanError):
             services.run_recovery(today=self.after_deadline(loan))
@@ -431,6 +438,7 @@ class LendingViewTests(LendingCase):
         r.refresh_from_db()
         self.assertIsNotNone(r.reversed_at)
 
+    @override_settings(FCU_LOAN_AUTO_RECOVERY_ENABLED=False)
     def test_recovery_button_is_refused_while_the_policy_is_off(self):
         loan = self.make_loan("300000")
         loan.installments.update(due_date=timezone.localdate() - timedelta(days=30))

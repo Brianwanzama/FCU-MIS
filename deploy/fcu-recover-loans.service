@@ -8,5 +8,5 @@ User=fcu
 Group=fcu
 WorkingDirectory=/opt/fcu-mis
 EnvironmentFile=/etc/fcu-mis/env
-# Does nothing but report until FCU_LOAN_AUTO_RECOVERY_ENABLED=True in /etc/fcu-mis/env.
+# Recovers overdue loans from savings (automatic recovery is on unless FCU_LOAN_AUTO_RECOVERY_ENABLED=False in /etc/fcu-mis/env).
 ExecStart=/opt/fcu-mis/venv/bin/python manage.py recover_overdue_loans

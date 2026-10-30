@@ -380,6 +380,11 @@ Contribution Register
 
                             </a>
 
+                            {% if user.can_delete_records and not contribution.cycle.is_locked %}
+                                <a href="{% url 'contributions:delete' contribution.pk %}"
+                                   class="btn btn-sm btn-outline-danger">Delete</a>
+                            {% endif %}
+
                             {% if not contribution.reversed_at and not contribution.cycle.is_locked %}
 
                                 {% if contribution.has_pending_reversal %}

@@ -222,6 +222,53 @@ def reject_reversal(reversal, actor, note):
     return reversal
 
 
+@transaction.atomic
+def delete_contribution(contribution, actor, reason):
+    """
+    Delete a wrongly entered contribution.
+
+    The row is removed from the register and from every balance. A full copy of
+    it, with who deleted it, when and why, is written to the audit log first, so
+    the deletion itself can always be traced. Contributions of a closed cycle
+    cannot be deleted until an Administrator reopens the cycle.
+    """
+
+    _require(actor, "can_delete_records", "delete contributions")
+
+    reason = (reason or "").strip()
+
+    if not reason:
+        raise ContributionError("A reason is required to delete a contribution.")
+
+    if contribution.cycle.is_locked:
+        raise ContributionError(
+            "Contributions belonging to a closed cycle cannot be deleted. "
+            "An Administrator must reopen the cycle first."
+        )
+
+    member = contribution.member
+    settled_cycle = contribution.settles_cycle
+    snapshot = _snapshot(contribution)
+    pk = contribution.pk
+    label = str(contribution)
+
+    log_action(
+        AuditLog.Action.DELETE,
+        instance=contribution,
+        actor=actor,
+        old_value=snapshot,
+        new_value={"event": "CONTRIBUTION_DELETED", "reason": reason},
+    )
+
+    contribution.reversals.all().delete()
+    contribution.delete()
+
+    _reassess_arrears(member, settled_cycle, actor)
+    _reassess_recovery(member, actor)
+
+    return label, pk
+
+
 # ============================================================
 # MEMBER SUMMARY
 # ============================================================

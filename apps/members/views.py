@@ -1,7 +1,8 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
-from django.db.models import Q
+from django.db import transaction
+from django.db.models import ProtectedError, Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.views import View
@@ -179,3 +180,62 @@ class MemberStatementExcelView(MemberFinanceAccessMixin, View):
         )
 
         return response
+
+
+
+class MemberDeleteView(LoginRequiredMixin, View):
+    """
+    Administrator deletes a member who has no financial history. A member with
+    contributions, loans or other records cannot be deleted (their history must
+    survive): mark them Withdrawn instead.
+    """
+
+    http_method_names = ["post"]
+
+    def post(self, request, member_code):
+
+        if not request.user.has_full_access:
+            raise PermissionDenied("Only an Administrator can delete a member.")
+
+        from apps.auditlog.models import AuditLog
+        from apps.auditlog.utils import log_action
+
+        member = get_object_or_404(Member, member_code=member_code)
+        reason = (request.POST.get("reason") or "").strip()
+
+        if not reason:
+            messages.error(request, "Give a reason for deleting this member.")
+            return redirect("members:detail", member_code=member.member_code)
+
+        if request.user.member_id == member.pk:
+            messages.error(request, "You cannot delete your own member record.")
+            return redirect("members:detail", member_code=member.member_code)
+
+        label = f"{member.member_code} {member.full_name}"
+
+        try:
+            with transaction.atomic():
+                account = getattr(member, "user_account", None)
+                snapshot = {"member": label, "status": member.status, "had_login": account is not None}
+
+                if account is not None:
+                    account.delete()
+
+                log_action(
+                    AuditLog.Action.DELETE,
+                    instance=member,
+                    actor=request.user,
+                    old_value=snapshot,
+                    new_value={"event": "MEMBER_DELETED", "reason": reason},
+                )
+                member.delete()
+        except ProtectedError:
+            messages.error(
+                request,
+                f"{label} has financial records, so the member cannot be deleted. "
+                "Set their status to Withdrawn instead; their history is kept.",
+            )
+            return redirect("members:detail", member_code=member.member_code)
+
+        messages.success(request, f"{label} deleted.")
+        return redirect("members:list")
