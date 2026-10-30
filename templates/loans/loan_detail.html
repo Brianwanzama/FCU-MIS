@@ -86,6 +86,14 @@
                     <button class="btn btn-sm btn-outline-danger" type="submit">Reverse</button>
                   </form>
                 {% endif %}
+                {% if can_delete %}
+                  <form method="post" class="d-inline-flex gap-1 mt-1" action="{% url 'loans:repayment_delete' r.pk %}"
+                        onsubmit="return confirm('Delete this entry? The loan balance will be recalculated.');">
+                    {% csrf_token %}
+                    <input type="text" name="reason" class="form-control form-control-sm" placeholder="Reason" required>
+                    <button class="btn btn-sm btn-danger" type="submit">Delete</button>
+                  </form>
+                {% endif %}
               </td>
             </tr>
           {% empty %}
@@ -107,10 +115,30 @@
           <dt class="col-6">Final due date</dt><dd class="col-6">{{ loan.final_due_date|date:"d M Y" }}</dd>
           <dt class="col-6">Total to repay</dt><dd class="col-6">{{ loan.total_due|ugx }}</dd>
           <dt class="col-6">Repaid so far</dt><dd class="col-6">{{ loan.total_paid|ugx }}</dd>
-          <dt class="col-6">Application</dt><dd class="col-6"><a href="{% url 'loans:detail' loan.application.pk %}">{{ loan.reference }}</a></dd>
+          {% if loan.application_id %}
+            <dt class="col-6">Application</dt><dd class="col-6"><a href="{% url 'loans:detail' loan.application_id %}">{{ loan.reference }}</a></dd>
+          {% else %}
+            <dt class="col-6">Source</dt><dd class="col-6"><span class="badge text-bg-info">Made outside the system</span></dd>
+            {% if loan.offsystem_note %}<dt class="col-6">Notes</dt><dd class="col-6">{{ loan.offsystem_note }}</dd>{% endif %}
+          {% endif %}
         </dl>
       </div>
     </div>
+
+    {% if can_delete %}
+      <div class="card fcu-card mb-4 border-danger">
+        <div class="card-header text-danger">Delete this loan</div>
+        <div class="card-body">
+          <form method="post" action="{% url 'loans:loan_delete' loan.pk %}"
+                onsubmit="return confirm('Delete this loan, its schedule and all its repayments?');">
+            {% csrf_token %}
+            <input type="text" name="reason" class="form-control form-control-sm mb-2" placeholder="Reason" required>
+            <button class="btn btn-danger btn-sm" type="submit">Delete loan</button>
+            <div class="form-text">Removes the loan, its schedule and repayments. A copy is kept in the audit log.</div>
+          </form>
+        </div>
+      </div>
+    {% endif %}
 
     {% if can_record %}
       <div class="card fcu-card mb-4">

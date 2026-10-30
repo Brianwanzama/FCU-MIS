@@ -6,5 +6,6 @@ app_name = "documents"
 
 urlpatterns = [
     path("", views.document_library, name="library"),
+    path("<int:pk>/delete/", views.delete_document, name="delete"),
     path("<int:pk>/download/", views.download_document, name="download"),
 ]

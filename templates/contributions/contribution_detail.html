@@ -23,6 +23,9 @@
     {% elif pending_reversal %}
       <span class="badge text-bg-warning fs-6">Reversal pending</span>
     {% endif %}
+    {% if user.can_delete_records and not contribution.cycle.is_locked %}
+      <a href="{% url 'contributions:delete' contribution.pk %}" class="btn btn-danger">Delete</a>
+    {% endif %}
     {% if is_changeable %}
       {% if user.can_edit_contributions %}
         <a href="{% url 'contributions:edit' contribution.pk %}" class="btn btn-outline-warning">Edit</a>
@@ -77,8 +80,8 @@
           <dt class="col-5">For month</dt><dd class="col-7">{{ contribution.period_month|date:"F Y" }}</dd>
           <dt class="col-5">Paid on</dt><dd class="col-7">{{ contribution.payment_date|date:"d M Y" }}</dd>
           <dt class="col-5">Method</dt><dd class="col-7">{{ contribution.get_payment_method_display }}</dd>
-          <dt class="col-5">Reference</dt><dd class="col-7">{{ contribution.reference|default:"—" }}</dd>
-          <dt class="col-5">Remarks</dt><dd class="col-7">{{ contribution.remarks|default:"—" }}</dd>
+          <dt class="col-5">Reference</dt><dd class="col-7">{{ contribution.reference|default:"-" }}</dd>
+          <dt class="col-5">Remarks</dt><dd class="col-7">{{ contribution.remarks|default:"-" }}</dd>
           <dt class="col-5">Recorded by</dt><dd class="col-7">{{ contribution.recorded_by }}</dd>
           <dt class="col-5">Recorded at</dt><dd class="col-7">{{ contribution.created_at|date:"d M Y H:i" }}</dd>
         </dl>

@@ -1,5 +1,5 @@
 """
-Financial Year and Financial Cycle — the temporal backbone of FCU-MIS (SRS v1.2, Phase 2).
+Financial Year and Financial Cycle, the temporal backbone of FCU-MIS (SRS v1.2, Phase 2).
 
 Every financial record in every later phase (contributions, loans, repayments,
 distributions) hangs off exactly one Cycle. Nothing here knows about money

@@ -5,7 +5,7 @@ from .models import AuditLog
 
 @admin.register(AuditLog)
 class AuditLogAdmin(admin.ModelAdmin):
-    """Read-only by design — audit entries must be viewable but never editable
+    """Read-only by design, audit entries must be viewable but never editable
     or deletable, including by superusers, so the trail stays trustworthy."""
 
     list_display = ("timestamp", "actor", "action", "model_name", "object_repr", "ip_address")

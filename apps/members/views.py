@@ -1,9 +1,10 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
-from django.db.models import Q
+from django.db import transaction
+from django.db.models import ProtectedError, Q
 from django.http import HttpResponse
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 from django.views.generic import DetailView, ListView, TemplateView
 
@@ -11,6 +12,7 @@ from apps.contributions.models import Contribution
 from apps.cycles.models import Cycle
 from apps.cycles.services import get_active_cycle
 
+from .forms import MemberForm
 from .models import Member
 from .services import (
     member_available_savings,
@@ -96,6 +98,11 @@ class MemberDetailView(MemberFinanceAccessMixin, DetailView):
 
         context["available_savings"] = member_available_savings(self.object)
 
+        if cycle:
+            from apps.reports.charts import monthly_deposits
+
+            context["chart_monthly"] = monthly_deposits(cycle, member=self.object)
+
         return context
 
 
@@ -174,3 +181,101 @@ class MemberStatementExcelView(MemberFinanceAccessMixin, View):
         )
 
         return response
+
+
+
+class MemberDeleteView(LoginRequiredMixin, View):
+    """
+    Administrator deletes a member who has no financial history. A member with
+    contributions, loans or other records cannot be deleted (their history must
+    survive): mark them Withdrawn instead.
+    """
+
+    http_method_names = ["post"]
+
+    def post(self, request, member_code):
+
+        if not request.user.has_full_access:
+            raise PermissionDenied("Only an Administrator can delete a member.")
+
+        from apps.auditlog.models import AuditLog
+        from apps.auditlog.utils import log_action
+
+        member = get_object_or_404(Member, member_code=member_code)
+        reason = (request.POST.get("reason") or "").strip()
+
+        if not reason:
+            messages.error(request, "Give a reason for deleting this member.")
+            return redirect("members:detail", member_code=member.member_code)
+
+        if request.user.member_id == member.pk:
+            messages.error(request, "You cannot delete your own member record.")
+            return redirect("members:detail", member_code=member.member_code)
+
+        label = f"{member.member_code} {member.full_name}"
+
+        try:
+            with transaction.atomic():
+                account = getattr(member, "user_account", None)
+                snapshot = {"member": label, "status": member.status, "had_login": account is not None}
+
+                if account is not None:
+                    account.delete()
+
+                log_action(
+                    AuditLog.Action.DELETE,
+                    instance=member,
+                    actor=request.user,
+                    old_value=snapshot,
+                    new_value={"event": "MEMBER_DELETED", "reason": reason},
+                )
+                member.delete()
+        except ProtectedError:
+            messages.error(
+                request,
+                f"{label} has financial records, so the member cannot be deleted. "
+                "Set their status to Withdrawn instead; their history is kept.",
+            )
+            return redirect("members:detail", member_code=member.member_code)
+
+        messages.success(request, f"{label} deleted.")
+        return redirect("members:list")
+
+
+
+class MemberFormView(LoginRequiredMixin, View):
+    """Add a member (no code) or edit one (member_code). Administrator only."""
+
+    template_name = "members/member_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated and not request.user.has_full_access:
+            raise PermissionDenied("Only an Administrator can add or edit members.")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_member(self, member_code):
+        return get_object_or_404(Member, member_code=member_code) if member_code else None
+
+    def get(self, request, member_code=None):
+        member = self.get_member(member_code)
+        return render(request, self.template_name, {"form": MemberForm(instance=member), "member": member})
+
+    def post(self, request, member_code=None):
+        from apps.auditlog.models import AuditLog
+        from apps.auditlog.utils import log_action
+
+        member = self.get_member(member_code)
+        form = MemberForm(request.POST, instance=member)
+
+        if form.is_valid():
+            saved = form.save()
+            log_action(
+                AuditLog.Action.UPDATE if member else AuditLog.Action.CREATE,
+                instance=saved,
+                actor=request.user,
+                new_value={"event": "MEMBER_SAVED", "fields": sorted(form.changed_data)},
+            )
+            messages.success(request, f"{saved.member_code} {saved.full_name} saved.")
+            return redirect("members:detail", member_code=saved.member_code)
+
+        return render(request, self.template_name, {"form": form, "member": member})

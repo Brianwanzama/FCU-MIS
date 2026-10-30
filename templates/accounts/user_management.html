@@ -7,122 +7,94 @@
 <h2 class="fcu-display">Users &amp; Roles</h2>
 
 <p class="text-muted">
-    Only Administrators can change a user's role.
-    Every change is recorded in the Audit Log.
+  Only Administrators can change roles, sign in as a member or set passwords.
+  A person can hold one main role plus additional roles; they get the permissions of all of them.
+  Every change is recorded in the Audit Log.
 </p>
 
+<form method="post" action="{% url 'accounts:require_password_change_all' %}" class="mb-3"
+      onsubmit="return confirm('Ask every other user to choose a new password at their next sign-in?');">
+  {% csrf_token %}
+  <button type="submit" class="btn btn-outline-dark btn-sm">Ask everyone to choose a new password at next sign-in</button>
+</form>
+
 <div class="card fcu-card">
-
-    <div class="card-body">
-
-        <table class="table table-bordered table-hover">
-
-            <thead>
-
-                <tr>
-
-                    <th>Member ID</th>
-                    <th>Name</th>
-                    <th>Current Role</th>
-                    <th>Change Role</th>
-
-                </tr>
-
-            </thead>
-
-            <tbody>
-
-            {% for u in users %}
-
-                <tr>
-
-                    <td>
-
-                        {{ u.member.member_code }}
-
-                    </td>
-
-                    <td>
-
-                        {{ u.member.full_name }}
-
-                    </td>
-
-                    <td>
-
-                        {{ u.get_role_display }}
-
-                    </td>
-
-                    <td>
-
-                        <form
-                            method="post"
-                            action="{% url 'accounts:change_role' u.pk %}"
-                            class="d-flex gap-2"
-                            onsubmit="return confirm('Change this user\'s role?');"
-                        >
-
-                            {% csrf_token %}
-
-                            <select
-                                name="role"
-                                class="form-select form-select-sm"
-                            >
-
-                                {% for value, label in u.Role.choices %}
-
-                                    <option
-                                        value="{{ value }}"
-                                        {% if value == u.role %}selected{% endif %}
-                                    >
-                                        {{ label }}
-                                    </option>
-
-                                {% endfor %}
-
-                            </select>
-
-                            <button
-                                type="submit"
-                                class="btn btn-sm btn-fcu-gold"
-                            >
-                                Save
-                            </button>
-
-                            <a
-                                href="{% url 'core:dashboard' %}"
-                                class="btn btn-sm btn-outline-secondary"
-                            >
-                                Cancel
-                            </a>
-
-                        </form>
-
-                    </td>
-
-                </tr>
-
-            {% empty %}
-
-                <tr>
-
-                    <td colspan="4" class="text-center text-muted">
-
-                        No users found.
-
-                    </td>
-
-                </tr>
-
-            {% endfor %}
-
-            </tbody>
-
-        </table>
-
+  <div class="card-body">
+    <div class="table-responsive">
+    <table class="table table-bordered table-hover align-middle">
+      <thead>
+        <tr>
+          <th>Member ID</th>
+          <th>Name</th>
+          <th>Roles</th>
+          <th>Change roles</th>
+          <th>Password &amp; access</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for u in users %}
+        <tr>
+          <td>{{ u.member.member_code|default:u.username }}</td>
+          <td>{{ u.member.full_name|default:"-" }}</td>
+          <td>
+            {{ u.roles_display }}
+            {% if u.must_change_password %}<div class="badge text-bg-warning mt-1">Must change password</div>{% endif %}
+          </td>
+          <td>
+            <form method="post" action="{% url 'accounts:change_role' u.pk %}" class="small"
+                  onsubmit="return confirm('Change this user\'s roles?');">
+              {% csrf_token %}
+              <label class="form-label small mb-0">Main role</label>
+              <select name="role" class="form-select form-select-sm mb-2">
+                {% for value, label in u.Role.choices %}
+                  <option value="{{ value }}" {% if value == u.role %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+              <div class="mb-2">
+                <span class="form-label small d-block">Also acts as</span>
+                {% for value, label in u.Role.choices %}
+                  {% if value != "MEMBER" %}
+                  <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="checkbox" name="extra_roles"
+                           id="x{{ u.pk }}{{ value }}" value="{{ value }}"
+                           {% if value in u.extra_roles %}checked{% endif %}>
+                    <label class="form-check-label" for="x{{ u.pk }}{{ value }}">{{ label }}</label>
+                  </div>
+                  {% endif %}
+                {% endfor %}
+              </div>
+              <button type="submit" class="btn btn-sm btn-fcu-gold">Save</button>
+            </form>
+          </td>
+          <td>
+            <div class="d-grid gap-1">
+              {% if u.pk != user.pk %}
+                <form method="post" action="{% url 'accounts:impersonate_start' u.pk %}">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-outline-primary w-100">Sign in as this user</button>
+                </form>
+                <form method="post" action="{% url 'accounts:temporary_password' u.pk %}"
+                      onsubmit="return confirm('Set a temporary password for this user?');">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-outline-secondary w-100">Set temporary password</button>
+                </form>
+                <form method="post" action="{% url 'accounts:require_password_change' u.pk %}">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-outline-secondary w-100">Ask to change password</button>
+                </form>
+              {% else %}
+                <span class="text-muted small">This is you.</span>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5" class="text-center text-muted">No users found.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
     </div>
-
+  </div>
 </div>
 
 {% endblock %}

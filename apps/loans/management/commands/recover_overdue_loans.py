@@ -7,9 +7,10 @@ class Command(BaseCommand):
     help = (
         "Find loans past their agreed repayment period and recover what is owed from "
         "the member's savings (Manual 4.6). Schedule this to run daily; it needs nobody "
-        "to be logged in and is safe to run more than once a day. Real recoveries only "
-        "happen when FCU_LOAN_AUTO_RECOVERY_ENABLED is on; use --dry-run to see what "
-        "would be recovered."
+        "to be logged in and is safe to run more than once a day (the system also runs the "
+        "same check by itself the first time anyone signs in each day). Real recoveries "
+        "happen unless FCU_LOAN_AUTO_RECOVERY_ENABLED is switched off; use --dry-run to "
+        "see what would be recovered."
     )
 
     def add_arguments(self, parser):

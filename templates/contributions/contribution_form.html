@@ -34,6 +34,18 @@
           {% csrf_token %}
 
           {% for field in form %}
+            {% if field.name == "amount" %}
+              <div class="mb-3">
+                <label for="quickAmount" class="form-label">Quick amount</label>
+                <select id="quickAmount" class="form-select" aria-describedby="quickHelp">
+                  <option value="">Choose a ready-made amount&hellip;</option>
+                </select>
+                <div id="quickHelp" class="form-text">
+                  Deposits go up in UGX 100,000 steps and emergency in UGX 5,000 steps.
+                  You can still type any other amount below (for example a part payment).
+                </div>
+              </div>
+            {% endif %}
             <div class="mb-3">
               <label for="{{ field.id_for_label }}" class="form-label">
                 {{ field.label }}
@@ -61,4 +73,44 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+{{ deposit_quick_amounts|json_script:"deposit-amounts" }}
+{{ emergency_quick_amounts|json_script:"emergency-amounts" }}
+<script>
+(function () {
+  var type = document.getElementById("id_contribution_type");
+  var amount = document.getElementById("id_amount");
+  var quick = document.getElementById("quickAmount");
+  if (!type || !amount || !quick) return;
+  var deposit = JSON.parse(document.getElementById("deposit-amounts").textContent);
+  var emergency = JSON.parse(document.getElementById("emergency-amounts").textContent);
+
+  function fill() {
+    var list = type.value === "EMERGENCY" ? emergency : deposit;
+    quick.innerHTML = "";
+    var first = document.createElement("option");
+    first.value = "";
+    first.textContent = "Choose a ready-made amount…";
+    quick.appendChild(first);
+    list.forEach(function (n) {
+      var o = document.createElement("option");
+      o.value = n;
+      o.textContent = "UGX " + n.toLocaleString("en-US");
+      quick.appendChild(o);
+    });
+  }
+  type.addEventListener("change", function () {
+    fill();
+    if (type.value && !amount.value) {
+      amount.value = (type.value === "EMERGENCY" ? emergency : deposit)[0];
+    }
+  });
+  quick.addEventListener("change", function () {
+    if (quick.value) amount.value = quick.value;
+  });
+  fill();
+})();
+</script>
 {% endblock %}

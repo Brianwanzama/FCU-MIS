@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Delete contribution{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb small">
+    <li class="breadcrumb-item"><a href="{% url 'contributions:list' %}">Contributions</a></li>
+    <li class="breadcrumb-item"><a href="{% url 'contributions:detail' contribution.pk %}">#{{ contribution.pk }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Delete</li>
+  </ol>
+</nav>
+
+<h1 class="mb-3">Delete contribution</h1>
+
+<div class="row"><div class="col-lg-7">
+  <div class="alert alert-danger">
+    This removes <strong>{{ contribution.amount|ugx }}</strong>
+    ({{ contribution.get_contribution_type_display }}, {{ contribution.period_month|date:"F Y" }})
+    for <strong>{{ contribution.member.member_code }} {{ contribution.member.full_name }}</strong>
+    from the register and every balance. A copy is kept in the audit log.
+  </div>
+
+  <div class="card fcu-card"><div class="card-body">
+    {% if form.non_field_errors %}
+      <div class="alert alert-danger">{% for e in form.non_field_errors %}<div>{{ e }}</div>{% endfor %}</div>
+    {% endif %}
+    <form method="post" novalidate>
+      {% csrf_token %}
+      <div class="mb-3">
+        <label class="form-label" for="{{ form.reason.id_for_label }}">Reason <span class="text-danger">*</span></label>
+        {{ form.reason }}
+        {% for e in form.reason.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
+        <div class="form-text">{{ form.reason.help_text }}</div>
+      </div>
+      <button type="submit" class="btn btn-danger">Delete contribution</button>
+      <a href="{% url 'contributions:detail' contribution.pk %}" class="btn btn-outline-secondary">Cancel</a>
+    </form>
+  </div></div>
+</div></div>
+{% endblock %}

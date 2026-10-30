@@ -78,6 +78,16 @@
         <button class="btn btn-outline-danger" type="submit">Withdraw application</button>
       </form>
     {% endif %}
+
+    {% if user.can_delete_records %}
+      <form method="post" class="mt-3" action="{% url 'loans:application_delete' application.pk %}"
+            onsubmit="return confirm('Delete this application and its uploaded form?');">
+        {% csrf_token %}
+        <label class="form-label small mb-1" for="delAppReason">Delete this application</label>
+        <input type="text" id="delAppReason" name="reason" class="form-control form-control-sm mb-2" placeholder="Reason" required>
+        <button class="btn btn-danger btn-sm" type="submit">Delete application</button>
+      </form>
+    {% endif %}
   </div>
 
   <div class="col-lg-6">

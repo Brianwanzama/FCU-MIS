@@ -69,7 +69,7 @@ DJANGO_CSRF_TRUSTED_ORIGINS=https://$DOMAIN
 FCU_MEDIA_ROOT=$DATA/media
 FCU_PRIVATE_MEDIA_ROOT=$DATA/private
 FCU_LOAN_LIMIT_PERCENT=100
-FCU_LOAN_AUTO_RECOVERY_ENABLED=False
+FCU_LOAN_AUTO_RECOVERY_ENABLED=True
 FCU_LOAN_RECOVERY_POLICY_REF=FCU Manual v3.0, section 4.6
 
 # Email: fill these in so password-reset and activation emails reach members.

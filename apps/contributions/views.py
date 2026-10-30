@@ -11,8 +11,11 @@ from apps.auditlog.models import AuditLog
 from apps.cycles.models import Cycle
 
 from .forms import (
+    DEPOSIT_QUICK_AMOUNTS,
+    EMERGENCY_QUICK_AMOUNTS,
     ContributionEditForm,
     ContributionForm,
+    DeleteForm,
     ReversalDecisionForm,
     ReversalRequestForm,
 )
@@ -22,6 +25,7 @@ from .services import (
     _snapshot,
     approve_reversal,
     cycle_contribution_summary,
+    delete_contribution,
     record_contribution,
     reject_reversal,
     request_reversal,
@@ -175,6 +179,8 @@ class ContributionCreateView(FinancialAccessMixin, CreateView):
 
         context = super().get_context_data(**kwargs)
         context["active_cycle"] = self.get_active_cycle()
+        context["deposit_quick_amounts"] = DEPOSIT_QUICK_AMOUNTS
+        context["emergency_quick_amounts"] = EMERGENCY_QUICK_AMOUNTS
 
         return context
 
@@ -387,3 +393,41 @@ class ReversalDecisionView(FinancialAccessMixin, View):
             messages.error(request, "; ".join(exc.messages))
 
         return redirect("contributions:reversals")
+
+
+
+class ContributionDeleteView(FinancialAccessMixin, FormView):
+    """Delete a wrongly entered contribution (reason required, kept in the audit log)."""
+
+    permission = "can_delete_records"
+    form_class = DeleteForm
+    template_name = "contributions/contribution_delete.html"
+
+    def dispatch(self, request, *args, **kwargs):
+
+        self.contribution = get_object_or_404(Contribution, pk=kwargs["pk"])
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+
+        context = super().get_context_data(**kwargs)
+        context["contribution"] = self.contribution
+
+        return context
+
+    def form_valid(self, form):
+
+        try:
+            delete_contribution(
+                self.contribution,
+                actor=self.request.user,
+                reason=form.cleaned_data["reason"],
+            )
+        except ContributionError as exc:
+            form.add_error(None, exc)
+            return self.form_invalid(form)
+
+        messages.success(self.request, "Contribution deleted. The deletion is kept in the audit log.")
+
+        return redirect("contributions:list")

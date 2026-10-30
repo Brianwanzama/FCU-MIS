@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}{{ FCU_SHORT_NAME }}{% endblock %} — {{ FCU_NAME }}</title>
+  <title>{% block title %}{{ FCU_SHORT_NAME }}{% endblock %} | {{ FCU_NAME }}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
@@ -14,6 +14,18 @@
 <body>
   {% include "partials/nav.html" %}
   <hr class="fcu-brand-rule m-0">
+
+  {% if request.session.impersonator_id %}
+    <div class="bg-warning-subtle border-bottom border-warning py-2">
+      <div class="container d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <span>You are signed in as <strong>{{ user.username }}</strong> (administrator view). Actions are recorded against this member.</span>
+        <form method="post" action="{% url 'accounts:impersonate_stop' %}" class="m-0">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-sm btn-dark">Back to my account</button>
+        </form>
+      </div>
+    </div>
+  {% endif %}
 
   <main class="container py-4">
     {% if messages %}

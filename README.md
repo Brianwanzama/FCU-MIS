@@ -1,4 +1,4 @@
-# FCU-MIS — Financial Cycle Unit Management Information System
+# FCU-MIS, Financial Cycle Unit Management Information System
 
 Phase 0 (project scaffolding) + Phase 1 (Members & Auth) of the roadmap in
 `FCU-MIS_SRS_v1.0.md`. Verified end-to-end against a real PostgreSQL database.
@@ -7,19 +7,19 @@ Phase 0 (project scaffolding) + Phase 1 (Members & Auth) of the roadmap in
 
 - Django project with environment-split settings (`config/settings/{base,dev,prod}.py`)
 - PostgreSQL as the only supported database, configured via `DATABASE_URL`
-- One local app per SRS domain module under `apps/` — most are still skeletons
+- One local app per SRS domain module under `apps/`, most are still skeletons
   (models arrive in their own roadmap phase); live in Phase 1 are:
-  - `apps.members` — the `Member` model, `member_code` (FCU0xx) auto-generation, seed data for FCU001–FCU019
-  - `apps.accounts` — custom `User` model (RBAC role + link to Member), closed-membership account activation, login/logout, password reset, admin-only user/role management
-  - `apps.documents` — versioned Loan Application Form / Member Declaration templates, downloadable by any logged-in user
-  - `apps.auditlog` — append-only audit trail; logs are wired for logins, account activation, and role changes today, and every future phase's financial writes will call the same `log_action()` helper
-  - `apps.core` — FCU-branded base template, navigation, role-aware dashboard shell
-- RBAC enforced server-side (`apps/accounts/permissions.py`) — verified with an actual 403 for a plain Member hitting an Administrator-only page, not just a hidden nav link
+  - `apps.members`, the `Member` model, `member_code` (FCU0xx) auto-generation, seed data for FCU001 to FCU019
+  - `apps.accounts`, custom `User` model (RBAC role + link to Member), closed-membership account activation, login/logout, password reset, admin-only user/role management
+  - `apps.documents`, versioned Loan Application Form / Member Declaration templates, downloadable by any logged-in user
+  - `apps.auditlog`, append-only audit trail; logs are wired for logins, account activation, and role changes today, and every future phase's financial writes will call the same `log_action()` helper
+  - `apps.core`, FCU-branded base template, navigation, role-aware dashboard shell
+- RBAC enforced server-side (`apps/accounts/permissions.py`), verified with an actual 403 for a plain Member hitting an Administrator-only page, not just a hidden nav link
 
 ## Known data gaps to close before go-live
 
 - **Member emails**: 13 of 19 members now have real emails (SRS v1.1 Appendix A).
-  The remaining 6 — FCU003, FCU005, FCU009, FCU010, FCU015, FCU017 — are stored
+  The remaining 6, FCU003, FCU005, FCU009, FCU010, FCU015, FCU017, are stored
   with a genuinely blank email (not a fake placeholder) and **cannot activate an
   account until an Administrator adds their real email** via Member Management.
 - **Join dates**: no per-member join date was supplied, so all 19 seeded members
@@ -38,13 +38,13 @@ createdb fcu_mis
 cp .env.example .env   # then edit DJANGO_SECRET_KEY at minimum
 
 python manage.py migrate
-python manage.py createsuperuser   # technical break-glass account only — see note below
+python manage.py createsuperuser   # technical break-glass account only, see note below
 python manage.py runserver
 ```
 
 Then visit `http://127.0.0.1:8000/accounts/activate/` and activate FCU001 or FCU004
 to get a real Administrator account tied to a Member (this is how the system is
-meant to be used day-to-day — the Django `createsuperuser` account is only a
+meant to be used day-to-day, the Django `createsuperuser` account is only a
 technical fallback for initial setup, not a normal login path).
 
 ## Document templates
@@ -59,7 +59,7 @@ via Django Admin (Administrators only) → Document Templates.
 The activation → RBAC → audit-log chain was verified with Django's test client
 during development (member activation, duplicate-activation rejection, wrong-email
 rejection, role-based 403, document download). A proper `pytest`/`TestCase` suite
-is recommended before Phase 2 — flag if you'd like that added now rather than later.
+is recommended before Phase 2, flag if you'd like that added now rather than later.
 
 ## Business rules confirmed by FCU
 
@@ -92,10 +92,16 @@ is recommended before Phase 2 — flag if you'd like that added now rather than 
 | Request a reversal | yes | yes | yes | no |
 | Approve / reject a reversal | yes | no | yes | no |
 
-- Financial records are never deleted (Django admin delete is disabled too). A
-  reversal is requested with a reason and takes effect only when someone *other than
-  the requester* approves it. The payment then stops counting towards balances but
-  stays in the register and the audit history.
+- A **reversal** is requested with a reason and takes effect only when someone *other
+  than the requester* approves it. The payment then stops counting towards balances but
+  stays in the register and the audit history. A wrongly entered payment can also simply
+  be **deleted** (Delete button): the Treasurer, Chairperson or Administrator gives a
+  reason, the entry leaves the register and every balance, and a full copy of it, with
+  who deleted it, when and why, stays in the audit log. Closed-cycle payments cannot be
+  deleted until the cycle is reopened.
+- **Quick amounts:** the entry form has a "Quick amount" list that follows the payment type
+  (deposits in UGX 100,000 steps up to 600,000; emergency in UGX 5,000 steps up to 30,000).
+  The amount box stays editable for part payments.
 - Every edit records old value, new value, user, time and reason; balances recalculate.
 - Contributions in a closed cycle cannot be edited or reversed until an Administrator
   reopens the cycle. A payment with a reversal pending cannot be edited.
@@ -195,11 +201,21 @@ Run `python manage.py migrate`: adds `loans.0001` and `contributions.0004`.
 - **Effect on status (4.6(d)):** if the recovery leaves the member below the deposits
   required for the cycle to date, they become Inactive ("Loan recovered from
   contributions") until they pay back up, then Active again automatically.
-- **Scheduled job:** run `python manage.py recover_overdue_loans` daily (Railway cron or
-  similar). It needs nobody logged in. It is **off until FCU approves the policy**: set
-  `FCU_LOAN_AUTO_RECOVERY_ENABLED=True` (and `FCU_LOAN_RECOVERY_POLICY_REF`, e.g. the
-  General Meeting resolution). Until then the command only prints a dry run of what it
-  would recover. `--dry-run` is always available.
+- **Automatic daily check:** recovery is **on by default** (`FCU_LOAN_AUTO_RECOVERY_ENABLED`,
+  set it to `False` to switch it off; `FCU_LOAN_RECOVERY_POLICY_REF` names the authority
+  written to the audit log). The check runs by itself the first time anyone signs in each
+  day, so no scheduler is needed, and it is recorded once per day (`RecoveryRun`), however
+  many servers or visits there are. `python manage.py recover_overdue_loans` (Railway cron
+  or similar) does the same work and is still fine to schedule; `--dry-run` only reports.
+  Disable the on-visit trigger with `FCU_LOAN_RECOVERY_ON_REQUEST=False`.
+- **Loans made outside the system:** the Treasurer, Chairperson or Administrator adds a
+  loan from **Loan register -> Add loan made outside the system**: member, amount, period,
+  interest, date given and anything already repaid. The system builds the schedule, so the
+  balance, overdue status, the member's loan limit and automatic recovery all work for it.
+- **Deleting:** wrongly entered repayments, recoveries, loans, applications and declarations
+  can be deleted by the Treasurer, Chairperson or Administrator with a reason. Deleting a
+  loan reopens its application as Approved; deleting a recovery gives the savings back. A
+  copy of everything deleted stays in the audit log.
 - Run `python manage.py migrate`: adds `loans.0002` and `members.0005`.
 
 ## Investments and profit distribution (Manual v3.0, sections 7 and 8)
@@ -208,7 +224,9 @@ Run `python manage.py migrate`: adds `loans.0001` and `contributions.0004`.
   ventures and real estate, registered in FCU's name. The Treasurer or Administrator
   records money invested, money returned, earnings received, fees and market value
   updates. Reversing a transaction needs the Administrator or Chairperson (not the
-  recorder) and a reason; records are never deleted.
+  recorder) and a reason. Transactions, whole investments and profit distributions can
+  also be **deleted** (reason required, copy kept in the audit log); the position is
+  recalculated.
 - **Position** per investment: invested, worth now (latest valuation, or what is still
   in it), earnings, and total return. **Every member** sees the portfolio totals and
   their own indicative share (their accumulated deposits as a share of all members'
@@ -223,6 +241,24 @@ Run `python manage.py migrate`: adds `loans.0001` and `contributions.0004`.
 - Member dashboard: net position = deposits + bonuses received - loan balance. A share
   of the investments is shown for information but not added (it is funded by the deposits).
 - Run `python manage.py migrate`: adds `unittrust.0001`.
+
+## Accounts, roles and passwords
+
+- **More than one role:** on *Users & Roles* the Administrator picks a main role and ticks
+  any "also acts as" roles (for example a Chairperson who is also Treasurer). A person
+  gets the permissions of every role they hold.
+- **Sign in as a member:** the Administrator can sign in as any other user to see exactly
+  what they see ("Sign in as this user"). A banner shows the Administrator is in someone
+  else's account with a "Back to my account" button; it is audited, and cannot be used
+  to enter another Administrator's account.
+- **Passwords:** every user can change their own password (*Change password* in the menu).
+  The Administrator can *Set a temporary password* (shown once, works without email) or
+  *Ask to change password* for one user or for everyone; flagged users must choose a new
+  password before they can use the system.
+- **Delete everywhere:** contributions, loan records, investments, profit distributions,
+  documents and members (a member with no financial history) can be deleted; a copy goes
+  to the audit log. Cycles already had a guarded delete.
+- Run `python manage.py migrate`: adds `accounts.0005` and `loans.0003`.
 
 ## Reports and Excel exports (Manual 10.2)
 
@@ -239,6 +275,22 @@ loans with repayments, investments with transactions, and each member's statemen
   membership fees are not recorded yet, so check it against the bank and cash balances.
 - Interest earned counts what is paid as interest first within each instalment.
 
+## Charts
+
+Interactive charts (Chart.js 4.4.1, bundled in `static/vendor/`, so no outside CDN is needed):
+
+- **Dashboard (officers):** deposits collected each month against the monthly target, and a ring of who
+  has met the deposit target. **Members** see their own deposits each month instead.
+- **Cycle report:** the same two, plus deposits paid by each member (click a bar to open the member) and
+  where the investments are.
+- **Investments:** where the money is, and the total return on each investment.
+- **Member page:** deposits paid each month against the monthly savings.
+
+Hover for exact figures, click the legend to hide a series. Every chart has a **View as table** fallback
+with the same numbers. Colours are the validated blue, orange and aqua series; the target ring uses the
+fixed status colours with a symbol and a label so it never relies on colour alone. Charts are hidden when
+printing. The data comes from `apps/reports/charts.py`, from the same records as the reports.
+
 ## Trying it out
 
 See **docs/TESTING.md**: run it on your computer, load demo logins with `python manage.py seed_demo`, and a walkthrough per role.
@@ -254,6 +306,6 @@ health check; CI runs on every push (`.github/workflows/ci.yml`).
 The SRS was revised to v1.1 (General Ledger, Financial Position, Cycle Locking,
 Member/Cycle Summary tables, Financial Year, Dashboard specs, Search, Data Import
 strategy, expanded Member Statement, performance via incremental summary refresh)
-before any further code was written, per the client's request. Phase 2 —
-Financial Year & Cycle management, including Cycle Locking — is next, per the
+before any further code was written, per the client's request. Phase 2 -
+Financial Year & Cycle management, including Cycle Locking, is next, per the
 revised roadmap in `FCU-MIS_SRS_v1.1.md`. Awaiting go-ahead.

@@ -12,6 +12,7 @@ Production (Railway):
 """
 
 import os
+import sys
 from pathlib import Path
 
 import environ
@@ -99,6 +100,8 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 
     "apps.auditlog.middleware.CurrentRequestMiddleware",
+    "apps.accounts.middleware.ForcePasswordChangeMiddleware",
+    "apps.loans.middleware.DailyLoanRecoveryMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -248,12 +251,21 @@ PRIVATE_MEDIA_ROOT = env.str("FCU_PRIVATE_MEDIA_ROOT", default="") or _volume_or
 
 FCU_UPLOAD_MAX_MB = env.int("FCU_UPLOAD_MAX_MB", default=5)
 
-# Automatic recovery of defaulted loans from a member's savings (Manual 4.6) runs
-# only when this is switched on, i.e. once FCU confirms the recovery policy. Until
-# then the nightly job only reports what it WOULD recover. Record the authority
-# (e.g. the General Meeting resolution) in the reference, which is written to the
-# audit log with every recovery.
-FCU_LOAN_AUTO_RECOVERY_ENABLED = env.bool("FCU_LOAN_AUTO_RECOVERY_ENABLED", default=False)
+# Automatic recovery of defaulted loans from a member's savings (Manual 4.6). It is
+# ON by default: once a loan's agreed repayment period has ended with money still
+# owed, the system recovers it from the member's deposits (emergency excluded).
+# Set FCU_LOAN_AUTO_RECOVERY_ENABLED=False to switch it off (the daily check then
+# only reports what it WOULD recover). The authority (e.g. the General Meeting
+# resolution) in the reference below is written to the audit log with every recovery.
+FCU_LOAN_AUTO_RECOVERY_ENABLED = env.bool("FCU_LOAN_AUTO_RECOVERY_ENABLED", default=True)
+
+# Run the daily recovery check by itself, the first time anyone uses the system
+# each day, so it works with no scheduler. A scheduled `manage.py
+# recover_overdue_loans` is still fine: the check only ever runs once a day.
+# (Off while running the test suite.)
+FCU_LOAN_RECOVERY_ON_REQUEST = env.bool(
+    "FCU_LOAN_RECOVERY_ON_REQUEST", default="test" not in sys.argv[:2]
+)
 FCU_LOAN_RECOVERY_POLICY_REF = env.str(
     "FCU_LOAN_RECOVERY_POLICY_REF", default="FCU Manual v3.0, section 4.6"
 )

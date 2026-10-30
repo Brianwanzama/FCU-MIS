@@ -38,7 +38,7 @@ def role_required(*roles):
             if user.is_administrator:
                 return view_func(request, *args, **kwargs)
 
-            if user.role not in roles:
+            if not user.has_role(*roles):
                 raise PermissionDenied(
                     "You do not have permission to access this page."
                 )
@@ -72,7 +72,7 @@ class RoleRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
         if user.is_administrator:
             return True
 
-        return user.role in self.allowed_roles
+        return user.has_role(*self.allowed_roles)
 
 
 def owner_or_staff_required(get_member_code):

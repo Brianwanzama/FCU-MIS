@@ -24,7 +24,7 @@
           </a>
         </h4>
         <div class="text-muted small">
-          {{ active_cycle.start_date|date:"d M Y" }} &ndash; {{ active_cycle.end_date|date:"d M Y" }}
+          {{ active_cycle.start_date|date:"d M Y" }} to {{ active_cycle.end_date|date:"d M Y" }}
           &middot; Deposit target {{ active_cycle.member_deposit_target|ugx }} + emergency {{ active_cycle.member_emergency_target|ugx }} per member
         </div>
       </div>
@@ -65,7 +65,7 @@
             </td>
             <td>{{ cycle.financial_year }}</td>
             <td class="small text-muted">
-              {{ cycle.start_date|date:"d M Y" }} &ndash; {{ cycle.end_date|date:"d M Y" }}
+              {{ cycle.start_date|date:"d M Y" }} to {{ cycle.end_date|date:"d M Y" }}
             </td>
             <td class="text-end">
               {{ cycle.duration_months }}

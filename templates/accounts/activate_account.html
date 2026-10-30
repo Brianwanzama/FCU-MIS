@@ -6,7 +6,7 @@
     <div class="card fcu-card">
       <div class="card-header">Activate My Account</div>
       <div class="card-body">
-        <p class="text-muted">Enter your Member ID and the email address on file with FCU, then choose a password. Only existing FCU members can activate an account — this is not a public sign-up form.</p>
+        <p class="text-muted">Enter your Member ID and the email address on file with FCU, then choose a password. Only existing FCU members can activate an account, this is not a public sign-up form.</p>
         <form method="post">
           {% csrf_token %}
           {% if form.non_field_errors %}

@@ -45,6 +45,18 @@ class ContributionForm(forms.ModelForm):
             css = "form-select" if isinstance(widget, forms.Select) else "form-control"
             widget.attrs["class"] = f"{widget.attrs.get('class', '')} {css}".strip()
 
+        # Quick amounts: pick a ready-made figure instead of typing it. The amount
+        # box stays editable, so part payments and odd amounts still work.
+        self.fields["amount"].widget.attrs.update(
+            {"inputmode": "numeric", "step": "1000", "min": "1"}
+        )
+
+
+# Ready-made amounts for the quick-amount lists (monthly deposit steps of
+# UGX 100,000; emergency steps of UGX 5,000).
+DEPOSIT_QUICK_AMOUNTS = [100_000 * n for n in range(1, 7)]
+EMERGENCY_QUICK_AMOUNTS = [5_000 * n for n in range(1, 7)]
+
 
 def _style(fields):
     for field in fields.values():
@@ -79,6 +91,19 @@ class ContributionEditForm(forms.ModelForm):
             "payment_date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
             "remarks": forms.Textarea(attrs={"rows": 3}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        _style(self.fields)
+
+
+class DeleteForm(forms.Form):
+    """Asks for the reason before a record is deleted."""
+
+    reason = forms.CharField(
+        widget=forms.Textarea(attrs={"rows": 2}),
+        help_text="Why is this being deleted? Kept permanently in the audit history.",
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

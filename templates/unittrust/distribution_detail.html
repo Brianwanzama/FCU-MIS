@@ -27,6 +27,11 @@
   {% if can_pay %}
     <form method="post" action="{% url 'unittrust:distribution_action' distribution.pk 'pay' %}">{% csrf_token %}<button class="btn btn-fcu-gold" type="submit">Mark as paid</button></form>
   {% endif %}
+  {% if user.can_delete_records %}
+    <form method="post" class="d-flex gap-2" action="{% url 'unittrust:distribution_delete' distribution.pk %}"
+          onsubmit="return confirm('Delete this profit distribution?');">{% csrf_token %}
+      <input type="text" name="reason" class="form-control" placeholder="Reason" required><button class="btn btn-danger" type="submit">Delete</button></form>
+  {% endif %}
   {% if can_cancel %}
     <form method="post" class="d-flex gap-2" action="{% url 'unittrust:distribution_action' distribution.pk 'cancel' %}">{% csrf_token %}
       <input type="text" name="reason" class="form-control" placeholder="Reason" required><button class="btn btn-outline-danger" type="submit">Cancel</button></form>

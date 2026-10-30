@@ -13,6 +13,9 @@ from .services import (
     cancel_distribution,
     close_investment,
     create_investment,
+    delete_distribution,
+    delete_investment,
+    delete_transaction,
     draft_distribution,
     mark_distribution_paid,
     member_investment_summary,
@@ -37,11 +40,20 @@ class PortfolioView(LoginRequiredMixin, View):
 
         user = request.user
 
+        from apps.reports.charts import investment_returns, portfolio_allocation
+
+        book = portfolio()
+        allocation = portfolio_allocation(book)
+        allocation["empty"] = "" if allocation["values"] else "No investments are held yet."
+        returns = investment_returns(book)
+        returns["empty"] = "" if returns["values"] else "Nothing has been invested yet."
+
         return render(
             request,
             "unittrust/portfolio.html",
             {
-                "book": portfolio(),
+                "charts": {"allocation": allocation, "returns": returns},
+                "book": book,
                 "mine": member_investment_summary(user.member) if user.member_id else None,
             },
         )
@@ -91,6 +103,7 @@ class InvestmentDetailView(LoginRequiredMixin, View):
                 if user.has_financial_view_access else [],
                 "can_record": user.has_financial_write_access and investment.status == "ACTIVE",
                 "can_reverse": user.has_chairperson_access,
+                "can_delete": user.can_delete_records,
                 "form": TransactionForm(initial={"transaction_date": timezone.localdate()}),
                 "reason_form": ReasonForm(),
             },
@@ -139,6 +152,61 @@ class TransactionReverseView(LoginRequiredMixin, View):
             messages.success(request, "Transaction reversed.")
 
         return redirect("unittrust:detail", pk=entry.investment_id)
+
+
+class TransactionDeleteView(LoginRequiredMixin, View):
+    http_method_names = ["post"]
+
+    def post(self, request, pk):
+
+        entry = get_object_or_404(InvestmentTransaction, pk=pk)
+        investment_id = entry.investment_id
+        form = ReasonForm(request.POST)
+
+        try:
+            delete_transaction(entry, request.user, form.cleaned_data["reason"] if form.is_valid() else "")
+        except InvestmentError as exc:
+            messages.error(request, _messages(exc))
+        else:
+            messages.success(request, "Transaction deleted. The deletion is kept in the audit log.")
+
+        return redirect("unittrust:detail", pk=investment_id)
+
+
+class InvestmentDeleteView(LoginRequiredMixin, View):
+    http_method_names = ["post"]
+
+    def post(self, request, pk):
+
+        investment = get_object_or_404(Investment, pk=pk)
+        form = ReasonForm(request.POST)
+
+        try:
+            delete_investment(investment, request.user, form.cleaned_data["reason"] if form.is_valid() else "")
+        except InvestmentError as exc:
+            messages.error(request, _messages(exc))
+            return redirect("unittrust:detail", pk=pk)
+
+        messages.success(request, "Investment deleted. The deletion is kept in the audit log.")
+        return redirect("unittrust:portfolio")
+
+
+class DistributionDeleteView(LoginRequiredMixin, View):
+    http_method_names = ["post"]
+
+    def post(self, request, pk):
+
+        distribution = get_object_or_404(ProfitDistribution, pk=pk)
+        form = ReasonForm(request.POST)
+
+        try:
+            delete_distribution(distribution, request.user, form.cleaned_data["reason"] if form.is_valid() else "")
+        except InvestmentError as exc:
+            messages.error(request, _messages(exc))
+            return redirect("unittrust:distribution", pk=pk)
+
+        messages.success(request, "Profit distribution deleted. The deletion is kept in the audit log.")
+        return redirect("unittrust:distributions")
 
 
 class InvestmentCloseView(LoginRequiredMixin, View):

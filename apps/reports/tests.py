@@ -216,3 +216,164 @@ class ReportViewTests(ReportCase):
         u2 = User.objects.create_user(username="u2", password="pw", role=User.Role.MEMBER, member=self.m2)
         self.client.login(username="u2", password="pw")
         self.assertEqual(self.client.get(url).status_code, 403)
+
+
+class ChartDataTests(ReportCase):
+    def test_monthly_deposits_group_by_the_month_paid_for(self):
+        from datetime import date as d
+
+        from .charts import monthly_deposits
+
+        for month, amount in ((self.cycle.start_date, "100000"), (self.cycle.start_date, "50000")):
+            cs.record_contribution(
+                Contribution(
+                    member=self.m1, cycle=self.cycle, contribution_type="MONTHLY", amount=Decimal(amount),
+                    period_month=month, payment_date=timezone.localdate(), payment_method="CASH",
+                    recorded_by=self.admin,
+                ),
+                actor=self.admin,
+            )
+        data = monthly_deposits(self.cycle)
+        self.assertEqual(len(data["labels"]), 6)
+        self.assertEqual(data["collected"][0], 150000)
+        self.assertEqual(sum(data["collected"][1:]), 0)
+        n = self.cycle.eligible_member_count
+        self.assertEqual(data["target"][0], 100000 * n)
+        mine = monthly_deposits(self.cycle, member=self.m1)
+        self.assertEqual(mine["target"][0], 100000)
+        self.assertEqual(monthly_deposits(self.cycle, member=self.m2)["collected"][0], 0)
+
+    def test_reversed_and_emergency_payments_are_left_out_of_the_monthly_chart(self):
+        from .charts import monthly_deposits
+
+        c = self.pay(self.m1, "100000")
+        self.pay(self.m1, "30000", kind="EMERGENCY")
+        r = cs.request_reversal(c, self.admin, "Dup")
+        cs.approve_reversal(r, self.chair)
+        self.assertEqual(sum(monthly_deposits(self.cycle)["collected"]), 0)
+
+    def test_member_status_counts_add_up(self):
+        from .charts import member_status
+
+        self.pay(self.m1, "600000")
+        self.pay(self.m2, "100000")
+        rows = services.member_rows(self.cycle)
+        data = member_status(rows)
+        self.assertEqual(sum(data["values"]), len(rows))
+        met, part, none = data["values"]
+        self.assertGreaterEqual(met, 1)
+        self.assertGreaterEqual(part, 1)
+        # every status carries a text label and a symbol, never colour alone
+        self.assertTrue(all(len(label) > 2 for label in data["labels"]))
+
+    def test_member_progress_is_sorted_and_links_to_the_member(self):
+        from .charts import member_progress
+
+        self.pay(self.m1, "600000")
+        self.pay(self.m2, "250000")
+        data = member_progress(services.member_rows(self.cycle))
+        self.assertEqual(data["paid"][0], 600000)
+        self.assertEqual(data["outstanding"][0], 0)
+        self.assertEqual(data["paid"][1], 250000)
+        self.assertEqual(data["outstanding"][1], 350000)
+        self.assertEqual(data["links"][0], f"/members/{self.m1.member_code}/")
+        self.assertEqual(data["paid"], sorted(data["paid"], reverse=True))
+
+    def test_allocation_keeps_three_by_name_and_folds_the_rest_into_other(self):
+        from .charts import portfolio_allocation
+
+        for i, amount in enumerate(("500000", "400000", "300000", "200000", "100000")):
+            inv = inv_services.create_investment(
+                self.treasurer, name=f"Fund {i}", kind="UNIT_TRUST",
+                opened_on=timezone.localdate() - timedelta(days=5),
+            )
+            inv_services.record_transaction(inv, K.INVEST, Decimal(amount), timezone.localdate(), self.treasurer)
+        data = portfolio_allocation(inv_services.portfolio())
+        self.assertEqual(data["labels"], ["Fund 0", "Fund 1", "Fund 2", "Other"])
+        self.assertEqual(data["values"], [500000, 400000, 300000, 300000])
+
+    def test_investment_returns_in_percent(self):
+        from .charts import investment_returns
+
+        inv = inv_services.create_investment(
+            self.treasurer, name="UT", kind="UNIT_TRUST", opened_on=timezone.localdate() - timedelta(days=5)
+        )
+        inv_services.record_transaction(inv, K.INVEST, Decimal("1000000"), timezone.localdate(), self.treasurer)
+        inv_services.record_transaction(inv, K.VALUATION, Decimal("1100000"), timezone.localdate(), self.treasurer)
+        data = investment_returns(inv_services.portfolio())
+        self.assertEqual(data["labels"], ["UT"])
+        self.assertEqual(data["values"], [10.0])
+
+
+class ChartPageTests(ReportCase):
+    def login(self, name):
+        self.client.logout()
+        self.client.login(username=name, password="pw")
+
+    def test_the_chart_library_ships_with_the_app(self):
+        from django.contrib.staticfiles import finders
+
+        self.assertIsNotNone(finders.find("vendor/chart.umd.js"))
+        self.assertIsNotNone(finders.find("js/fcu-charts.js"))
+
+    def test_officer_dashboard_has_the_unit_charts(self):
+        self.pay(self.m1, "100000")
+        self.login("treasurer")
+        r = self.client.get("/dashboard/")
+        self.assertContains(r, 'id="chart-monthly"')
+        self.assertContains(r, 'id="chart-status"')
+        self.assertContains(r, "vendor/chart.umd.js")
+        self.assertContains(r, 'role="img"')
+
+    def test_member_dashboard_shows_only_their_own_chart(self):
+        self.pay(self.m1, "100000")
+        self.login("u1")
+        r = self.client.get("/dashboard/")
+        self.assertContains(r, 'id="chart-mine"')
+        self.assertNotContains(r, 'id="chart-status"')
+        self.assertNotContains(r, 'id="chart-progress"')
+
+    def test_dashboard_without_an_active_cycle_still_loads(self):
+        cycle_services.close_cycle(self.cycle, actor=self.admin)
+        self.login("treasurer")
+        r = self.client.get("/dashboard/")
+        self.assertEqual(r.status_code, 200)
+        self.assertNotContains(r, 'id="chart-monthly"')
+
+    def test_report_page_has_all_four_charts(self):
+        self.pay(self.m1, "600000")
+        self.login("chair")
+        r = self.client.get(f"/reports/cycle/{self.cycle.pk}/")
+        for chart in ("chart-monthly", "chart-status", "chart-progress"):
+            self.assertContains(r, f'id="{chart}"')
+        # no investments yet: a plain message instead of an empty chart
+        self.assertNotContains(r, 'id="chart-allocation"')
+        self.assertContains(r, "No investments are held yet.")
+
+    def test_member_page_has_the_members_monthly_chart(self):
+        self.login("u1")
+        r = self.client.get(f"/members/{self.m1.member_code}/")
+        self.assertContains(r, 'id="chart-member-monthly"')
+
+    def test_investments_page_charts(self):
+        inv = inv_services.create_investment(
+            self.treasurer, name="UT", kind="UNIT_TRUST", opened_on=timezone.localdate() - timedelta(days=5)
+        )
+        inv_services.record_transaction(inv, K.INVEST, Decimal("1000000"), timezone.localdate(), self.treasurer)
+        self.login("u1")
+        r = self.client.get("/investments/")
+        self.assertContains(r, 'id="chart-allocation"')
+        self.assertContains(r, 'id="chart-returns"')
+
+    def test_names_cannot_break_out_of_the_embedded_chart_data(self):
+        inv = inv_services.create_investment(
+            self.treasurer, name="</script><script>alert(1)</script>", kind="UNIT_TRUST",
+            opened_on=timezone.localdate() - timedelta(days=5),
+        )
+        inv_services.record_transaction(inv, K.INVEST, Decimal("1000000"), timezone.localdate(), self.treasurer)
+        self.login("treasurer")
+        html = self.client.get(f"/reports/cycle/{self.cycle.pk}/").content.decode()
+        self.assertNotIn("</script><script>alert(1)", html)
+        self.assertNotIn("<script>alert(1)", html)
+        html = self.client.get("/investments/").content.decode()
+        self.assertNotIn("<script>alert(1)", html)

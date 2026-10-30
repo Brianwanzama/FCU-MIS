@@ -4,7 +4,10 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
   <h1 class="mb-0">Loan register</h1>
-  <a href="{% url 'loans:applications' %}" class="btn btn-outline-secondary">Applications</a>
+  <div class="d-flex gap-2">
+    {% if can_add_offsystem %}<a href="{% url 'loans:offsystem_new' %}" class="btn btn-fcu-primary">Add loan made outside the system</a>{% endif %}
+    <a href="{% url 'loans:applications' %}" class="btn btn-outline-secondary">Applications</a>
+  </div>
 </div>
 
 <div class="card fcu-card mb-4 {% if overdue %}border-danger{% endif %}">
@@ -32,7 +35,7 @@
   {% endif %}
   <div class="card-body border-top small">
     {% if recovery_enabled %}
-      Automatic recovery is <strong>on</strong>: it runs every day with nobody logged in, taking the amount owed (principal and
+      Automatic recovery is <strong>on</strong>: the system checks every day (the first time anyone signs in) and takes the amount owed (principal and
       interest) from the member's savings across all cycles. Emergency contributions are never used.
       {% if can_run and overdue %}
         <form method="post" action="{% url 'loans:recovery_run' %}" class="mt-2"
@@ -42,7 +45,7 @@
         </form>
       {% endif %}
     {% else %}
-      Automatic recovery is <strong>off</strong> until FCU confirms the recovery policy, so nothing is taken. The figures above show what it would recover.
+      Automatic recovery is <strong>off</strong> because the setting <code>FCU_LOAN_AUTO_RECOVERY_ENABLED</code> is set to False on the server, so nothing is taken. The figures above show what it would recover. Set it to True (or remove it) and redeploy to switch recovery on.
     {% endif %}
   </div>
 </div>
@@ -55,7 +58,7 @@
       <tbody>
       {% for loan in loans %}
         <tr>
-          <td><a href="{% url 'loans:loan' loan.pk %}">{{ loan.reference }}</a></td>
+          <td><a href="{% url 'loans:loan' loan.pk %}">{{ loan.reference }}</a>{% if loan.is_offsystem %} <span class="badge text-bg-info">Off-system</span>{% endif %}</td>
           <td>{{ loan.member.member_code }} &middot; {{ loan.member.full_name }}</td>
           <td>{{ loan.disbursed_on|date:"d M Y" }}</td>
           <td class="text-end">{{ loan.principal|ugx }}</td>

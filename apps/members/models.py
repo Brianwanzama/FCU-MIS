@@ -114,7 +114,7 @@ class Member(models.Model):
         ordering = ["member_code"]
 
     def __str__(self):
-        return f"{self.member_code} — {self.full_name}"
+        return f"{self.member_code} - {self.full_name}"
 
     def save(self, *args, **kwargs):
         if not self.member_code:

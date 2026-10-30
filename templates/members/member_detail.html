@@ -618,6 +618,12 @@
     {% endif %}
 
 
+    {% if chart_monthly %}
+    <div class="mb-4">
+        {% include "partials/chart_card.html" with chart_id="chart-member-monthly" kind="monthly" title="Deposits paid each month" data=chart_monthly note="Bars are what was paid for each month; the dashed line is the monthly savings target." size="short" %}
+    </div>
+    {% endif %}
+
     <!-- ===================================================== -->
     <!-- FCU MEMBER STATUS -->
     <!-- ===================================================== -->
@@ -747,7 +753,7 @@
 
                                 {% else %}
 
-                                    —
+                                    -
 
                                 {% endif %}
 
@@ -783,7 +789,7 @@
 
                             <td>
 
-                                {{ contribution.reference|default:"—" }}
+                                {{ contribution.reference|default:"-" }}
 
                             </td>
 
@@ -795,7 +801,7 @@
 
                                 {% else %}
 
-                                    —
+                                    -
 
                                 {% endif %}
 
@@ -987,7 +993,7 @@
                 {% endif %}
 
                 {% if user.has_full_access %}
-                <a href="{% url 'admin:members_member_change' member.id %}"
+                <a href="{% url 'members:edit' member.member_code %}"
                    class="btn btn-outline-secondary">
 
                     Edit Member
@@ -997,10 +1003,26 @@
 
             </div>
 
+            {% if user.has_full_access and not viewing_own %}
+            <form method="post" action="{% url 'members:delete' member.member_code %}"
+                  class="d-flex flex-wrap gap-2 mt-3"
+                  onsubmit="return confirm('Delete this member? This only works for a member with no financial records.');">
+                {% csrf_token %}
+                <input type="text" name="reason" class="form-control" style="max-width:22rem" placeholder="Reason for deleting this member" required>
+                <button type="submit" class="btn btn-danger">Delete member</button>
+            </form>
+            {% endif %}
+
         </div>
 
     </div>
 
 </div>
 
+{% endblock %}
+
+{% block extra_scripts %}
+{% load static %}
+<script src="{% static 'vendor/chart.umd.js' %}"></script>
+<script src="{% static 'js/fcu-charts.js' %}"></script>
 {% endblock %}

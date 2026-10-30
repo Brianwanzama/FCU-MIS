@@ -11,7 +11,17 @@
       <strong>{{ doc.get_doc_type_display }}</strong>
       <div class="text-muted small">Version {{ doc.version_label }} &middot; effective {{ doc.effective_from }}</div>
     </div>
-    <a href="{% url 'documents:download' doc.pk %}" class="btn btn-fcu-primary btn-sm">Download</a>
+    <div class="d-flex gap-2 align-items-center">
+      <a href="{% url 'documents:download' doc.pk %}" class="btn btn-fcu-primary btn-sm">Download</a>
+      {% if user.has_secretariat_access %}
+      <form method="post" action="{% url 'documents:delete' doc.pk %}" class="d-inline-flex gap-1"
+            onsubmit="return confirm('Delete this document from the library?');">
+        {% csrf_token %}
+        <input type="text" name="reason" class="form-control form-control-sm" placeholder="Reason" required>
+        <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+      </form>
+      {% endif %}
+    </div>
   </div>
   {% empty %}
   <p class="text-muted">No document templates have been uploaded yet. An Administrator can add them from the Admin panel.</p>

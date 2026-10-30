@@ -4,6 +4,7 @@ from .views import (
     ContributionCreateView,
     ContributionDetailView,
     ContributionListView,
+    ContributionDeleteView,
     ContributionUpdateView,
     ReversalDecisionView,
     ReversalListView,
@@ -23,5 +24,6 @@ urlpatterns = [
     ),
     path("<int:pk>/", ContributionDetailView.as_view(), name="detail"),
     path("<int:pk>/edit/", ContributionUpdateView.as_view(), name="edit"),
+    path("<int:pk>/delete/", ContributionDeleteView.as_view(), name="delete"),
     path("<int:pk>/reverse/", ReversalRequestView.as_view(), name="reverse"),
 ]

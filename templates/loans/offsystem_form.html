@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Add a loan made outside the system{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb small">
+    <li class="breadcrumb-item"><a href="{% url 'loans:register' %}">Loan register</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Add loan made outside the system</li>
+  </ol>
+</nav>
+
+<h1 class="mb-2">Add a loan made outside the system</h1>
+<p class="text-muted">
+  For loans that were given before the system, or never went through an application. Enter the
+  original terms: the system builds the repayment schedule, tracks the balance and overdue status,
+  and includes it in the member's loan limit and in automatic recovery.
+</p>
+
+<div class="row"><div class="col-lg-8">
+  <div class="card fcu-card"><div class="card-body">
+    {% if form.non_field_errors %}
+      <div class="alert alert-danger">{% for e in form.non_field_errors %}<div>{{ e }}</div>{% endfor %}</div>
+    {% endif %}
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {% for field in form %}
+        <div class="mb-3">
+          <label for="{{ field.id_for_label }}" class="form-label">
+            {{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}
+          </label>
+          {{ field }}
+          {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+          {% for e in field.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
+        </div>
+      {% endfor %}
+      <button type="submit" class="btn btn-fcu-primary">Add loan</button>
+      <a href="{% url 'loans:register' %}" class="btn btn-outline-secondary">Cancel</a>
+    </form>
+  </div></div>
+</div></div>
+{% endblock %}

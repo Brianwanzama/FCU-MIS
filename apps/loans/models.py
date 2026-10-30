@@ -137,7 +137,15 @@ class Loan(models.Model):
         SETTLED = "SETTLED", "Settled"
         DEFAULTED = "DEFAULTED", "Defaulted"
 
-    application = models.OneToOneField(LoanApplication, on_delete=models.PROTECT, related_name="loan")
+    application = models.OneToOneField(
+        LoanApplication, on_delete=models.PROTECT, related_name="loan", null=True, blank=True,
+        help_text="Empty for a loan that was made outside the system and added by an officer.",
+    )
+    is_offsystem = models.BooleanField(
+        default=False,
+        help_text="A loan managed off-system (before the system, or outside its application process).",
+    )
+    offsystem_note = models.TextField(blank=True)
     member = models.ForeignKey("members.Member", on_delete=models.PROTECT, related_name="loans")
     cycle = models.ForeignKey("cycles.Cycle", on_delete=models.PROTECT, related_name="loans")
     principal = models.DecimalField(max_digits=12, decimal_places=2)
@@ -164,7 +172,9 @@ class Loan(models.Model):
 
     @property
     def reference(self):
-        return self.application.reference
+        if self.application_id:
+            return self.application.reference
+        return f"OFF-{self.pk:05d}" if self.pk else "OFF-new"
 
     @property
     def disbursement_method_label(self):
@@ -282,3 +292,24 @@ class LoanRepayment(models.Model):
 
     def __str__(self):
         return f"{self.loan.reference} {self.get_kind_display()} {self.amount}"
+
+
+
+class RecoveryRun(models.Model):
+    """
+    One row per day the automatic recovery check has run. The unique date makes
+    sure the daily check happens once however many servers or visits there are.
+    """
+
+    run_date = models.DateField(unique=True)
+    started_at = models.DateTimeField(auto_now_add=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    loans_checked = models.PositiveIntegerField(default=0)
+    total_recovered = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
+    error = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-run_date"]
+
+    def __str__(self):
+        return f"Recovery check {self.run_date}"
