@@ -753,7 +753,7 @@
 
                                 {% else %}
 
-                                    —
+                                    -
 
                                 {% endif %}
 
@@ -789,7 +789,7 @@
 
                             <td>
 
-                                {{ contribution.reference|default:"—" }}
+                                {{ contribution.reference|default:"-" }}
 
                             </td>
 
@@ -801,7 +801,7 @@
 
                                 {% else %}
 
-                                    —
+                                    -
 
                                 {% endif %}
 
@@ -993,7 +993,7 @@
                 {% endif %}
 
                 {% if user.has_full_access %}
-                <a href="{% url 'admin:members_member_change' member.id %}"
+                <a href="{% url 'members:edit' member.member_code %}"
                    class="btn btn-outline-secondary">
 
                     Edit Member

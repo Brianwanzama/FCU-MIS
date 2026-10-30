@@ -1,7 +1,7 @@
 """
 Seeds the two governing documents as the initial DocumentTemplate versions
 (FR-17), reading them from the tracked seed_files/ directory bundled with this
-app so a fresh `migrate` on any environment is self-contained — no manual
+app so a fresh `migrate` on any environment is self-contained, no manual
 shell steps needed to make the Document Library functional out of the box.
 """
 import pathlib

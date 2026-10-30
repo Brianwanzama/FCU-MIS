@@ -16,7 +16,7 @@
 </div>
 
 <h1 class="mb-1">Financial report</h1>
-<p class="text-muted">Cycle {{ cycle.cycle_number }} &middot; {{ cycle.name }} ({{ cycle.start_date|date:"d M Y" }} &ndash; {{ cycle.end_date|date:"d M Y" }}) &middot; {{ cycle.get_status_display }}<br>Prepared {{ report.generated_at|date:"d M Y H:i" }}</p>
+<p class="text-muted">Cycle {{ cycle.cycle_number }} &middot; {{ cycle.name }} ({{ cycle.start_date|date:"d M Y" }} to {{ cycle.end_date|date:"d M Y" }}) &middot; {{ cycle.get_status_display }}<br>Prepared {{ report.generated_at|date:"d M Y H:i" }}</p>
 
 {% with c=report.contributions loans=report.loans inv=report.investments pos=report.position %}
 

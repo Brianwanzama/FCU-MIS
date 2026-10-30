@@ -22,11 +22,11 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('contribution_type', models.CharField(choices=[('MONTHLY', 'Monthly Contribution'), ('EMERGENCY', 'Emergency Contribution')], help_text='Manual §1.1 defines a Contribution as including both the monthly savings payment and the Emergency Fund payment. They are tracked separately because a member may pay one and not the other, and the Emergency Fund is ring-fenced under §6.1.', max_length=20)),
-                ('amount', models.DecimalField(decimal_places=2, help_text='The amount actually paid — not the amount due. Partial payments are legitimate and are stored as separate rows; the shortfall is derived, never stored.', max_digits=12)),
+                ('amount', models.DecimalField(decimal_places=2, help_text='The amount actually paid, not the amount due. Partial payments are legitimate and are stored as separate rows; the shortfall is derived, never stored.', max_digits=12)),
                 ('period_month', models.DateField(help_text='WHICH month this payment settles, normalised to the 1st of that month. Distinct from payment_date: Manual §3.2 lets a month be paid up to the 5th of the following month, so a June contribution may legitimately carry a July payment_date.')),
                 ('payment_date', models.DateField(help_text='WHEN the money was received. Used to judge lateness against Manual §3.2.')),
                 ('payment_method', models.CharField(choices=[('CASH', 'Cash'), ('BANK', 'Bank Transfer'), ('MOBILE_MONEY', 'Mobile Money')], help_text='How the money reached FCU.', max_length=20)),
-                ('reference', models.CharField(blank=True, help_text='Optional. Mobile-money transaction ID, bank slip number, or receipt number — whatever lets this row be traced back to a real movement of money.', max_length=100)),
+                ('reference', models.CharField(blank=True, help_text='Optional. Mobile-money transaction ID, bank slip number, or receipt number, whatever lets this row be traced back to a real movement of money.', max_length=100)),
                 ('remarks', models.TextField(blank=True, help_text='Optional free text, e.g. an explanation for a part payment.')),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),

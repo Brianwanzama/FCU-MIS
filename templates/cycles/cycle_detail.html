@@ -51,7 +51,7 @@
 {% if cycle.status == "UPCOMING" and active_cycle %}
   <div class="alert alert-info">
     <strong>Cycle {{ active_cycle.cycle_number }} is still active.</strong>
-    Close it before activating this one. Closing locks its records &mdash; so it is a
+    Close it before activating this one. Closing locks its records, so it is a
     deliberate step, not something that happens to you as a side effect.
   </div>
 {% endif %}
@@ -78,7 +78,7 @@
       <div class="card-body">
         <dl class="row mb-0">
           <dt class="col-sm-5">Period</dt>
-          <dd class="col-sm-7">{{ cycle.start_date|date:"d M Y" }} &ndash; {{ cycle.end_date|date:"d M Y" }}</dd>
+          <dd class="col-sm-7">{{ cycle.start_date|date:"d M Y" }} to {{ cycle.end_date|date:"d M Y" }}</dd>
 
           <dt class="col-sm-5">Duration</dt>
           <dd class="col-sm-7">
@@ -97,7 +97,7 @@
           <dd class="col-sm-7">
             {{ cycle.payment_window_closes|date:"d M Y" }}
             <div class="text-muted small">
-              Manual 3.2 &mdash; a month's contribution may arrive up to the 10th of the
+              Manual 3.2, a month's contribution may arrive up to the 10th of the
               following month, which is after this cycle's own end date.
             </div>
           </dd>
@@ -191,7 +191,7 @@
           <tr>
             <td>{{ m.member.member_code }} &middot; {{ m.member.full_name }}</td>
             <td>{{ m.joined_on|date:"d M Y" }}</td>
-            <td>{% if m.left_on %}{{ m.left_on|date:"d M Y" }} (withdrew){% else %}&mdash;{% endif %}</td>
+            <td>{% if m.left_on %}{{ m.left_on|date:"d M Y" }} (withdrew){% else %}-{% endif %}</td>
           </tr>
         {% endfor %}
         </tbody>

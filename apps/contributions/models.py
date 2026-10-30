@@ -1,9 +1,9 @@
 """
-Contributions — the data layer (SRS v1.2, Phase 3, Deliverable 1).
+Contributions, the data layer (SRS v1.2, Phase 3, Deliverable 1).
 
 A Contribution row is a TRANSACTION: one payment, as it actually happened. It is
 not a monthly summary. A member may settle a single month in two instalments, pay
-two months at once, or pay late — each of those is a separate row, and the summary
+two months at once, or pay late, each of those is a separate row, and the summary
 figures (months contributed, total, remaining balance) are derived by aggregating
 rows, never by storing them.
 
@@ -12,7 +12,7 @@ The distinction that makes this work is between two dates:
     payment_date   WHEN the money arrived.
     period_month   WHICH month the money settles.
 
-They are routinely different, and the difference is not an edge case — Manual §3.2
+They are routinely different, and the difference is not an edge case, Manual §3.2
 gives a Payment Window that runs to the 10th of the FOLLOWING month, so a June
 contribution paid on 4 July is on time. Without period_month there is no way to
 tell that payment apart from an early July one, which would make the late-payment
@@ -21,7 +21,7 @@ all uncomputable.
 
 Manual references:
     §1.1     "Contribution" includes BOTH the monthly savings and the Emergency Fund
-             payment — hence ContributionType, and hence they are counted separately.
+             payment, hence ContributionType, and hence they are counted separately.
     §3.1     UGX 100,000 savings + UGX 5,000 Emergency Fund, per member, per month.
     §3.2     The Payment Window: 1st of the month to the 10th of the month following.
     §6.1     Emergency Fund contributions are ring-fenced to the Emergency Fund.
@@ -63,17 +63,17 @@ class Contribution(models.Model):
 
     Deletion behaviour is PROTECT on every relation, deliberately:
 
-    * member — a Member who has contributed has financial history. Manual §2.5(c)
+    * member, a Member who has contributed has financial history. Manual §2.5(c)
       requires those contributions to survive the member's withdrawal so they can
       be refunded net of dues, and §4.6 allows recovery of a defaulted loan from
       them. CASCADE here would erase that history the moment anyone tidied up the
       member list, silently and irreversibly. A member with contributions should
       simply not be deletable.
 
-    * cycle — apps.cycles already refuses to delete a cycle carrying financial
+    * cycle, apps.cycles already refuses to delete a cycle carrying financial
       records; PROTECT is the database-level half of that promise.
 
-    * recorded_by — the Treasurer or Administrator who entered the row. Removing a
+    * recorded_by, the Treasurer or Administrator who entered the row. Removing a
       user must never quietly rewrite who recorded what.
     """
 
@@ -129,7 +129,7 @@ class Contribution(models.Model):
         max_digits=12,
         decimal_places=2,
         help_text=(
-            "The amount actually paid — not the amount due. Partial payments are "
+            "The amount actually paid, not the amount due. Partial payments are "
             "legitimate and are stored as separate rows; the shortfall is derived, "
             "never stored."
         ),
@@ -159,7 +159,7 @@ class Contribution(models.Model):
         blank=True,
         help_text=(
             "Optional. Mobile-money transaction ID, bank slip number, or receipt "
-            "number — whatever lets this row be traced back to a real movement of money."
+            "number, whatever lets this row be traced back to a real movement of money."
         ),
     )
 
@@ -245,7 +245,7 @@ class Contribution(models.Model):
         # Normalise period_month to the 1st before it ever reaches the database.
         # Every aggregation groups on this column, so two rows for the same month
         # written with different days would silently split into two "months
-        # contributed" — the exact miscount this field exists to prevent.
+        # contributed", the exact miscount this field exists to prevent.
         if self.period_month is not None:
             self.period_month = self.period_month.replace(day=1)
 
@@ -270,7 +270,7 @@ class Contribution(models.Model):
                 code="future_payment_date",
             )
 
-        # The cycle must be ACTIVE — but only when the row is first created.
+        # The cycle must be ACTIVE, but only when the row is first created.
         #
         # Enforcing it on every save would make historical Cycles 1-4 (which are
         # CLOSED) impossible to import, and would make an existing row in a

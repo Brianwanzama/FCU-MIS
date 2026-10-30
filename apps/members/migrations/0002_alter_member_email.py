@@ -13,6 +13,6 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='member',
             name='email',
-            field=models.EmailField(blank=True, help_text="Blank (NULL) for a member whose email isn't yet known — never a fake placeholder address. A blank email blocks that member's account activation (FR-2.2) until an Administrator adds the real one.", max_length=254, null=True, unique=True),
+            field=models.EmailField(blank=True, help_text="Blank (NULL) for a member whose email isn't yet known, never a fake placeholder address. A blank email blocks that member's account activation (FR-2.2) until an Administrator adds the real one.", max_length=254, null=True, unique=True),
         ),
     ]

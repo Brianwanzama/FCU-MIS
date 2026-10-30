@@ -4,7 +4,7 @@ from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import ProtectedError, Q
 from django.http import HttpResponse
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 from django.views.generic import DetailView, ListView, TemplateView
 
@@ -12,6 +12,7 @@ from apps.contributions.models import Contribution
 from apps.cycles.models import Cycle
 from apps.cycles.services import get_active_cycle
 
+from .forms import MemberForm
 from .models import Member
 from .services import (
     member_available_savings,
@@ -239,3 +240,42 @@ class MemberDeleteView(LoginRequiredMixin, View):
 
         messages.success(request, f"{label} deleted.")
         return redirect("members:list")
+
+
+
+class MemberFormView(LoginRequiredMixin, View):
+    """Add a member (no code) or edit one (member_code). Administrator only."""
+
+    template_name = "members/member_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated and not request.user.has_full_access:
+            raise PermissionDenied("Only an Administrator can add or edit members.")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_member(self, member_code):
+        return get_object_or_404(Member, member_code=member_code) if member_code else None
+
+    def get(self, request, member_code=None):
+        member = self.get_member(member_code)
+        return render(request, self.template_name, {"form": MemberForm(instance=member), "member": member})
+
+    def post(self, request, member_code=None):
+        from apps.auditlog.models import AuditLog
+        from apps.auditlog.utils import log_action
+
+        member = self.get_member(member_code)
+        form = MemberForm(request.POST, instance=member)
+
+        if form.is_valid():
+            saved = form.save()
+            log_action(
+                AuditLog.Action.UPDATE if member else AuditLog.Action.CREATE,
+                instance=saved,
+                actor=request.user,
+                new_value={"event": "MEMBER_SAVED", "fields": sorted(form.changed_data)},
+            )
+            messages.success(request, f"{saved.member_code} {saved.full_name} saved.")
+            return redirect("members:detail", member_code=saved.member_code)
+
+        return render(request, self.template_name, {"form": form, "member": member})

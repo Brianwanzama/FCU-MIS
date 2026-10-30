@@ -35,7 +35,7 @@
   {% endif %}
   <div class="card-body border-top small">
     {% if recovery_enabled %}
-      Automatic recovery is <strong>on</strong>: it runs every day with nobody logged in, taking the amount owed (principal and
+      Automatic recovery is <strong>on</strong>: the system checks every day (the first time anyone signs in) and takes the amount owed (principal and
       interest) from the member's savings across all cycles. Emergency contributions are never used.
       {% if can_run and overdue %}
         <form method="post" action="{% url 'loans:recovery_run' %}" class="mt-2"
@@ -45,7 +45,7 @@
         </form>
       {% endif %}
     {% else %}
-      Automatic recovery is <strong>off</strong> until FCU confirms the recovery policy, so nothing is taken. The figures above show what it would recover.
+      Automatic recovery is <strong>off</strong> because the setting <code>FCU_LOAN_AUTO_RECOVERY_ENABLED</code> is set to False on the server, so nothing is taken. The figures above show what it would recover. Set it to True (or remove it) and redeploy to switch recovery on.
     {% endif %}
   </div>
 </div>

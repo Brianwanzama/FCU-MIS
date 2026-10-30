@@ -60,7 +60,7 @@
 <div class="card fcu-card">
   <div class="table-responsive">
     <table class="table align-middle mb-0">
-      <thead><tr><th>Investment</th><th>Type</th><th class="text-end">Invested</th><th class="text-end">Worth now</th><th class="text-end">Earnings</th><th class="text-end">Return</th></tr></thead>
+      <thead><tr><th>Investment</th><th>Type</th><th class="text-end">Invested</th><th class="text-end">Worth now</th><th class="text-end">Earnings</th><th class="text-end">Return</th>{% if user.can_delete_records %}<th></th>{% endif %}</tr></thead>
       <tbody>
       {% for p in book.positions %}
         <tr>
@@ -72,9 +72,19 @@
           <td class="text-end">{{ p.market_value|ugx }}</td>
           <td class="text-end">{{ p.income|ugx }}</td>
           <td class="text-end">{{ p.total_return|ugx }} <span class="small text-muted">({{ p.return_percent }}%)</span></td>
+          {% if user.can_delete_records %}
+          <td class="text-end text-nowrap">
+            <form method="post" class="d-inline-flex gap-1" action="{% url 'unittrust:delete' p.investment.pk %}"
+                  onsubmit="return confirm('Delete this investment and all its transactions?');">
+              {% csrf_token %}
+              <input type="text" name="reason" class="form-control form-control-sm" placeholder="Reason" required>
+              <button class="btn btn-sm btn-danger" type="submit">Delete</button>
+            </form>
+          </td>
+          {% endif %}
         </tr>
       {% empty %}
-        <tr><td colspan="6" class="text-center text-muted py-5">No investments have been recorded yet.</td></tr>
+        <tr><td colspan="7" class="text-center text-muted py-5">No investments have been recorded yet.</td></tr>
       {% endfor %}
       </tbody>
     </table>

@@ -35,7 +35,7 @@
       {% for u in users %}
         <tr>
           <td>{{ u.member.member_code|default:u.username }}</td>
-          <td>{{ u.member.full_name|default:"—" }}</td>
+          <td>{{ u.member.full_name|default:"-" }}</td>
           <td>
             {{ u.roles_display }}
             {% if u.must_change_password %}<div class="badge text-bg-warning mt-1">Must change password</div>{% endif %}

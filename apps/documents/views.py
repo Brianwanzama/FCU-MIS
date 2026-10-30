@@ -10,7 +10,7 @@ from .models import DocumentTemplate
 
 @login_required
 def document_library(request):
-    """FR-17.2 — any authenticated user can view/download the current templates."""
+    """FR-17.2, any authenticated user can view/download the current templates."""
     templates = DocumentTemplate.objects.filter(is_current=True)
     return render(request, "documents/library.html", {"templates": templates})
 

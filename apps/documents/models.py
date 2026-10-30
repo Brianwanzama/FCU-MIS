@@ -4,7 +4,7 @@ from django.db import models
 
 class DocumentTemplate(models.Model):
     """
-    FR-17 — the official Loan Application Form and Member Declaration & Commitment
+    FR-17, the official Loan Application Form and Member Declaration & Commitment
     Agreement, stored as versioned, downloadable templates. Distribution only:
     members upload the signed copies through the Loans module, which keeps them as private files.
     """

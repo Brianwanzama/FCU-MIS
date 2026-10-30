@@ -8,7 +8,7 @@ from .models import User
 
 
 class FCULoginForm(AuthenticationForm):
-    """Cosmetic wrapper only — behaviour is Django's default, just styled for Bootstrap 5."""
+    """Cosmetic wrapper only, behaviour is Django's default, just styled for Bootstrap 5."""
 
     username = forms.CharField(
         label="Member ID",
@@ -24,7 +24,7 @@ class AccountActivationForm(forms.Form):
     """
     Implements FR-2.2 end to end in one submission: verifies the Member ID + email
     match an existing, not-yet-activated member record, then captures the new
-    password — validated all at once rather than across two requests/sessions,
+    password, validated all at once rather than across two requests/sessions,
     which removes an entire class of session-fixation/half-completed-signup bugs
     while still requiring exactly the two pieces of information the brief specifies.
     """

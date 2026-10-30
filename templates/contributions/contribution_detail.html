@@ -80,8 +80,8 @@
           <dt class="col-5">For month</dt><dd class="col-7">{{ contribution.period_month|date:"F Y" }}</dd>
           <dt class="col-5">Paid on</dt><dd class="col-7">{{ contribution.payment_date|date:"d M Y" }}</dd>
           <dt class="col-5">Method</dt><dd class="col-7">{{ contribution.get_payment_method_display }}</dd>
-          <dt class="col-5">Reference</dt><dd class="col-7">{{ contribution.reference|default:"—" }}</dd>
-          <dt class="col-5">Remarks</dt><dd class="col-7">{{ contribution.remarks|default:"—" }}</dd>
+          <dt class="col-5">Reference</dt><dd class="col-7">{{ contribution.reference|default:"-" }}</dd>
+          <dt class="col-5">Remarks</dt><dd class="col-7">{{ contribution.remarks|default:"-" }}</dd>
           <dt class="col-5">Recorded by</dt><dd class="col-7">{{ contribution.recorded_by }}</dd>
           <dt class="col-5">Recorded at</dt><dd class="col-7">{{ contribution.created_at|date:"d M Y H:i" }}</dd>
         </dl>

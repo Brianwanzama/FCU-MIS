@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}{% if member %}Edit member{% else %}New member{% endif %}{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb small">
+    <li class="breadcrumb-item"><a href="{% url 'members:list' %}">Members</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{% if member %}Edit {{ member.member_code }}{% else %}New member{% endif %}</li>
+  </ol>
+</nav>
+
+<h1 class="mb-3">{% if member %}Edit {{ member.member_code }}{% else %}New member{% endif %}</h1>
+
+<div class="row"><div class="col-lg-7">
+  <div class="card fcu-card"><div class="card-body">
+    {% if form.non_field_errors %}
+      <div class="alert alert-danger">{% for e in form.non_field_errors %}<div>{{ e }}</div>{% endfor %}</div>
+    {% endif %}
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {% for field in form %}
+        <div class="mb-3">
+          {% if field.field.widget.input_type == "checkbox" %}
+            <div class="form-check">
+              {{ field }}
+              <label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+            </div>
+          {% else %}
+            <label for="{{ field.id_for_label }}" class="form-label">
+              {{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}
+            </label>
+            {{ field }}
+          {% endif %}
+          {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+          {% for e in field.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
+        </div>
+      {% endfor %}
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-fcu-primary">{% if member %}Save changes{% else %}Add member{% endif %}</button>
+        <a href="{% if member %}{% url 'members:detail' member.member_code %}{% else %}{% url 'members:list' %}{% endif %}"
+           class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+  </div></div>
+</div></div>
+{% endblock %}

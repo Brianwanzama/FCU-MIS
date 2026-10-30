@@ -179,3 +179,39 @@ class DeleteMemberAndDocumentTests(TestCase):
         self.client.force_login(self.secretary)
         r = self.client.post(f"/members/{self.members[2].member_code}/delete/", {"reason": "x"})
         self.assertEqual(r.status_code, 403)
+
+
+class MemberFormTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.members = list(Member.objects.order_by("member_code")[:2])
+        cls.admin = make_user("adm", User.Role.ADMINISTRATOR, cls.members[0], is_staff=True, is_superuser=True)
+        cls.person = make_user("person", User.Role.MEMBER, cls.members[1])
+
+    def test_new_member_page_has_save_and_cancel(self):
+        self.client.force_login(self.admin)
+        page = self.client.get("/members/new/")
+        self.assertContains(page, "Cancel")
+        self.assertContains(page, "Add member")
+
+    def test_administrator_adds_and_edits_a_member(self):
+        self.client.force_login(self.admin)
+        r = self.client.post("/members/new/", {
+            "full_name": "Test New", "email": "new.person@example.org", "phone": "0700111222",
+            "national_id_number": "", "joined_date": "2026-01-05"})
+        member = Member.objects.get(email="new.person@example.org")
+        self.assertRedirects(r, f"/members/{member.member_code}/")
+        self.client.post(f"/members/{member.member_code}/edit/", {
+            "full_name": "Test Renamed", "email": "new.person@example.org", "phone": "0700111222",
+            "national_id_number": "", "joined_date": "2026-01-05"})
+        member.refresh_from_db()
+        self.assertEqual(member.full_name, "Test Renamed")
+
+    def test_a_plain_member_cannot_add_members(self):
+        self.client.force_login(self.person)
+        self.assertEqual(self.client.get("/members/new/").status_code, 403)
+
+    def test_no_em_dashes_in_the_pages(self):
+        self.client.force_login(self.admin)
+        for url in ("/dashboard/", "/members/", "/members/new/", "/accounts/users/", "/loans/register/"):
+            self.assertNotContains(self.client.get(url), "—", msg_prefix=url)

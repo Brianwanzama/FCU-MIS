@@ -5,14 +5,14 @@ from django.db import models
 class AuditLog(models.Model):
     """
     Append-only record of every significant system action (FR-16).
-    Deliberately has no update/delete path anywhere in the app layer —
+    Deliberately has no update/delete path anywhere in the app layer -
     see AuditLogAdmin and the absence of any edit/delete view for this model.
     """
 
     class Action(models.TextChoices):
         CREATE = "CREATE", "Create"
         UPDATE = "UPDATE", "Update"
-        DELETE = "DELETE", "Delete"  # logical/soft actions only — financial rows are never hard-deleted
+        DELETE = "DELETE", "Delete"  # logical/soft actions only, financial rows are never hard-deleted
         LOGIN = "LOGIN", "Login"
         LOGIN_FAILED = "LOGIN_FAILED", "Failed login"
         LOGOUT = "LOGOUT", "Logout"

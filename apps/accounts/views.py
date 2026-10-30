@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 class ActivateAccountView(FormView):
     """
-    FR-2.2 — Closed-membership self-service account activation.
+    FR-2.2, Closed-membership self-service account activation.
 
     Only existing FCU members can activate an account.
     """

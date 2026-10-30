@@ -1,4 +1,4 @@
-/* FCU-MIS design tokens — drawn from the Manual's own cover branding
+/* FCU-MIS design tokens, drawn from the Manual's own cover branding
    (deep teal + gold on warm off-white), not a generic template palette. */
 :root {
   --fcu-teal-900: #0b3d3c;
@@ -15,6 +15,8 @@
   --fcu-danger: #9a3324;
   --fcu-radius: 10px;
 }
+
+html { font-size: 14px; }
 
 body {
   background-color: var(--fcu-bg);

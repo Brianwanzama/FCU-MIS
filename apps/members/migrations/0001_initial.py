@@ -21,7 +21,7 @@ class Migration(migrations.Migration):
                 ('phone', models.CharField(blank=True, max_length=20)),
                 ('national_id_number', models.CharField(blank=True, help_text='National ID Number, as captured on the Loan Application Form.', max_length=30, verbose_name='NIN')),
                 ('joined_date', models.DateField()),
-                ('status', models.CharField(choices=[('ACTIVE', 'Active'), ('INACTIVE', 'Inactive')], default='ACTIVE', editable=False, help_text='Computed automatically by the member-status engine (FR-6 / Manual §2.1, §3.5). There is deliberately no form or admin field to set this directly — see apps.cycles for the recalculation logic (added in that roadmap phase).', max_length=10)),
+                ('status', models.CharField(choices=[('ACTIVE', 'Active'), ('INACTIVE', 'Inactive')], default='ACTIVE', editable=False, help_text='Computed automatically by the member-status engine (FR-6 / Manual §2.1, §3.5). There is deliberately no form or admin field to set this directly, see apps.cycles for the recalculation logic (added in that roadmap phase).', max_length=10)),
                 ('is_designated_admin', models.BooleanField(default=False, help_text='Seed-time flag only. When a member with this flag set activates their account, apps.accounts automatically assigns the Administrator role (per FCU001/FCU004 in the brief). Not exposed in any regular member-management form.')),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
