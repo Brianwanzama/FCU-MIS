@@ -8,6 +8,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views import View
 
+from apps.members.models import Member
+
 from .forms import DistributionDraftForm, InvestmentForm, ReasonForm, TransactionForm
 from .models import Investment, InvestmentTransaction, ProfitDistribution, ProfitStatement
 from .services import (
@@ -23,6 +25,7 @@ from .services import (
     delete_profit_statement,
     delete_distribution,
     delete_interest_credit,
+    delete_other_deposit,
     delete_investment,
     delete_transaction,
     delete_withdrawal,
@@ -33,6 +36,7 @@ from .services import (
     other_savings,
     other_savings_overview,
     pay_withdrawal,
+    record_other_deposit,
     portfolio,
     position,
     profit_figures,
@@ -41,7 +45,7 @@ from .services import (
     request_withdrawal,
     record_transaction,
     reverse_transaction,
-    unit_trust_income_for_month,
+    interest_preview,
     unpublish_profit,
 )
 
@@ -423,11 +427,7 @@ def _recent_months(count=12):
     credited = {c.month: c for c in InterestCredit.objects.all()}
     months = []
     for _ in range(count):
-        months.append({
-            "first": first,
-            "income": unit_trust_income_for_month(first),
-            "credit": credited.get(first),
-        })
+        months.append({"first": first, "preview": interest_preview(first), "credit": credited.get(first)})
         first = (first - timedelta(days=1)).replace(day=1)
     return months
 
@@ -451,6 +451,9 @@ class OtherSavingsView(LoginRequiredMixin, View):
         if user.has_financial_view_access:
             context["overview"] = other_savings_overview()
             context["months"] = _recent_months()
+            context["members"] = Member.objects.exclude(status=Member.Status.WITHDRAWN).order_by("member_code")
+            context["today"] = timezone.localdate()
+            context["quick_amounts"] = [50_000, 100_000, 200_000, 500_000, 1_000_000]
 
         return render(request, "unittrust/other_savings.html", context)
 
@@ -461,7 +464,7 @@ class OtherSavingsActionView(LoginRequiredMixin, View):
     def post(self, request, action, pk=None):
         from datetime import date
 
-        from apps.unittrust.models import InterestCredit, InterestWithdrawal
+        from apps.unittrust.models import InterestCredit, InterestWithdrawal, OtherSavingsDeposit
 
         user = request.user
         reason = request.POST.get("reason", "")
@@ -471,6 +474,16 @@ class OtherSavingsActionView(LoginRequiredMixin, View):
                 month = date.fromisoformat(request.POST.get("month", ""))
                 credit_unit_trust_interest(month, user)
                 messages.success(request, f"Unit trust interest for {month:%B %Y} credited to members.")
+            elif action == "deposit":
+                member = get_object_or_404(Member, pk=request.POST.get("member") or 0)
+                deposit = record_other_deposit(
+                    user, member, request.POST.get("amount", "0") or "0",
+                    date.fromisoformat(request.POST.get("deposit_date", "")),
+                    request.POST.get("payment_method", ""), request.POST.get("reference", ""))
+                messages.success(request, f"Recorded UGX {deposit.amount:,.0f} Other savings for {member.member_code}.")
+            elif action == "delete-deposit":
+                delete_other_deposit(get_object_or_404(OtherSavingsDeposit, pk=pk), user, reason)
+                messages.success(request, "Deposit deleted. A copy is kept in the audit log.")
             elif action == "withdraw":
                 if not user.member_id:
                     raise PermissionDenied

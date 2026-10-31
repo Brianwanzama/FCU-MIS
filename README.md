@@ -273,28 +273,35 @@ Run `python manage.py migrate`: adds `loans.0001` and `contributions.0004`.
 - This is a statement of profit, not a payout. Paying a bonus is still a profit distribution approved
   with a General Meeting resolution. Run `python manage.py migrate`: adds `unittrust.0002`.
 
-## Other savings (unit trust interest for members)
+## Other savings (extra savings that earn unit trust interest)
 
-- **Other Savings** (menu, `/investments/other-savings/`) is the members' view of the unit trust.
-  Each month the Treasurer or Administrator records the unit trust earnings and fees on the unit
-  trust investment, then presses **Credit to members** for that month. The earnings less fees are
-  shared by relative contribution: each member's deposits up to the end of that month as a percentage
-  of everyone's (emergency excluded), so later deposits do not earn past interest. Recalculating a
-  month is allowed unless a member has already withdrawn or asked for more than the new figure.
-- A member sees what is **available to withdraw**, the total earned, what they have withdrawn, what
-  they can **expect each month** at their current share (from the latest month credited; an estimate,
-  not a promise), and what each extra UGX 100,000 saved would add. That figure is there to encourage
-  saving with FCU. The month-by-month history and their withdrawals are listed below.
-- **Withdrawing:** a member requests an amount up to what is available (whole shillings); the
-  Treasurer or Administrator pays it and records cash, bank or mobile money and a reference, or
-  rejects it with a reason. The member can cancel a request that has not been paid. Management
-  (Administrator, Treasurer, Chairperson) sees what is owed to each member, the open requests and
-  the months credited. Deleting a credit or a withdrawal record needs a reason and keeps an audit copy.
-- Unit trust earnings now reach members here, so the **profit statement no longer shares them
-  again**: profit to share is loan interest plus other investments, less expenses. The unit trust
-  line is still shown on the profit page for information.
-- The financial position in the cycle report shows **other savings owed to members**, and the derived
-  cash falls when interest is paid out. Run `python manage.py migrate`: adds `unittrust.0003`.
+- **Other Savings** (menu, `/investments/other-savings/`) lets a member save extra money with FCU,
+  apart from their regular monthly deposits. The Treasurer or Administrator records the deposit
+  (member, amount with a quick-amount list, date, method, reference) and records the same money as
+  invested in the unit trust. Regular deposits, the group's money and the group's usual unit trust
+  income are not part of Other savings.
+- **How the interest is worked out** (each month, "Credit a month's interest"): the unit trust holds
+  the group's money and Other savings together. Its earnings for the month, less fees, are divided by
+  how much of the unit trust's money each supplied, averaged over the days of the month:
+  `Other savings part = earnings x (average Other savings balance / average money in the unit trust)`.
+  Only that part is credited to members, shared by each member's own average Other savings balance
+  (money counts from the day it is dated, so saving earlier earns more). **The rest stays with the
+  group** as its usual unit trust income, and the profit statement shows the unit trust line net of
+  what was credited to Other savings. The page shows the whole split for every month before it is
+  credited, and warns if more is held in Other savings than is recorded as invested.
+- A member sees what they have saved, the interest earned and **available to withdraw**, the rate the
+  last credited month earned, what they can **expect each month** at their balance and what each
+  extra UGX 100,000 saved adds (an estimate, not a promise), plus their deposits and month-by-month
+  interest. The interest can be withdrawn at any time: the member requests an amount (whole shillings,
+  up to what is available); the Treasurer or Administrator pays it and records cash, bank or mobile
+  money and a reference, or rejects it with a reason. Management (Administrator, Treasurer,
+  Chairperson) sees the deposits, what is owed to each member and the open requests.
+- Recalculating a month is allowed unless a member has already withdrawn or asked for more than the
+  new figure. A deposit cannot be deleted once interest was credited for its month. Deleting a deposit,
+  a credit or a withdrawal record needs a reason and keeps an audit copy. The cycle report's financial
+  position shows what is owed to members for Other savings (savings and interest); the derived cash
+  includes the deposits and falls when interest is paid out.
+- Run `python manage.py migrate`: adds `unittrust.0003` and `unittrust.0004`.
 
 ## Accounts, roles and passwords
 
