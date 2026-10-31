@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Expenses{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+  <h1 class="mb-0">Expenses</h1>
+  <div class="d-flex gap-2 align-items-center">
+    <form method="get" class="d-flex gap-2">
+      <select name="cycle" class="form-select form-select-sm" onchange="this.form.submit()" aria-label="Cycle">
+        {% for c in cycles %}
+          <option value="{{ c.pk }}" {% if cycle and c.pk == cycle.pk %}selected{% endif %}>Cycle {{ c.cycle_number }} ({{ c.get_status_display }})</option>
+        {% endfor %}
+      </select>
+      <noscript><button class="btn btn-sm btn-outline-secondary">Show</button></noscript>
+    </form>
+    {% if can_record %}<a href="{% url 'expenses:create' %}" class="btn btn-fcu-primary btn-sm">Record expense</a>{% endif %}
+  </div>
+</div>
+
+{% if not cycle %}
+  <div class="alert alert-light border">There is no cycle yet.</div>
+{% else %}
+  <p class="text-muted">Cycle {{ cycle.cycle_number }} &middot; {{ cycle.name }} ({{ cycle.start_date|date:"d M Y" }} to {{ cycle.end_date|date:"d M Y" }})
+    {% if cycle.is_locked %}&middot; closed, so expenses are read-only{% endif %}</p>
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="card fcu-card h-100"><div class="card-body">
+        <div class="text-muted small">Total spent this cycle</div>
+        <div class="fs-3 fw-semibold">{{ summary.total|ugx }}</div>
+        <div class="small text-muted">{{ summary.count }} expense{{ summary.count|pluralize }}</div>
+      </div></div>
+    </div>
+    <div class="col-md-8">
+      <div class="card fcu-card h-100">
+        <div class="card-header">By category</div>
+        <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+          <tbody>
+          {% for row in summary.by_category %}
+            <tr><td>{{ row.label }}</td><td class="text-muted small">{{ row.count }}</td><td class="text-end">{{ row.total|ugx }}</td></tr>
+          {% empty %}
+            <tr><td class="text-muted text-center py-3">Nothing spent yet.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card fcu-card">
+    <div class="table-responsive"><table class="table align-middle mb-0">
+      <thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Paid to</th><th class="text-end">Amount</th><th>By</th><th></th></tr></thead>
+      <tbody>
+      {% for e in summary.rows %}
+        <tr>
+          <td class="text-nowrap">{{ e.expense_date|date:"d M Y" }}</td>
+          <td>{{ e.get_category_display }}</td>
+          <td>{{ e.description }}
+            <div class="small text-muted">{{ e.get_payment_method_display }}{% if e.reference %} &middot; {{ e.reference }}{% endif %}</div></td>
+          <td>{{ e.paid_to|default:"-" }}</td>
+          <td class="text-end">{{ e.amount|ugx }}</td>
+          <td class="small">{{ e.recorded_by }}</td>
+          <td class="text-end text-nowrap">
+            {% if can_record %}<a href="{% url 'expenses:edit' e.pk %}" class="btn btn-sm btn-outline-warning">Edit</a>{% endif %}
+            {% if can_delete %}
+              <form method="post" class="d-inline-flex gap-1" action="{% url 'expenses:delete' e.pk %}"
+                    onsubmit="return confirm('Delete this expense?');">
+                {% csrf_token %}
+                <input type="text" name="reason" class="form-control form-control-sm" placeholder="Reason" required>
+                <button class="btn btn-sm btn-danger" type="submit">Delete</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7" class="text-center text-muted py-5">No expenses recorded for this cycle.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+{% endif %}
+{% endblock %}

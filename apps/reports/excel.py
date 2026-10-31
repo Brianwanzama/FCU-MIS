@@ -73,6 +73,7 @@ def cycle_workbook(report):
     loans = report["loans"]
     inv = report["investments"]
     pos = report["position"]
+    exp = report["expenses"]
 
     wb = Workbook()
 
@@ -104,12 +105,17 @@ def cycle_workbook(report):
         ["Worth now", inv["market_value"]],
         ["Profit shared with members", inv["distributed"]],
         [],
+        ["EXPENSES"],
+        ["Spent this cycle", exp["total"]],
+        *[[f"  {row['label']}", row["total"]] for row in exp["by_category"]],
+        [],
         ["FINANCIAL POSITION (as of now)"],
         ["Members' deposits", pos["members_deposits"]],
         ["Emergency fund", pos["emergency_fund"]],
         ["Loans receivable", pos["loans_receivable"]],
         ["Investments", pos["investments"]],
-        ["Derived cash (excludes expenses and fees, not recorded)", pos["derived_cash"]],
+        ["Other savings owed to members (unit trust interest)", pos["other_savings_owed"]],
+        ["Derived cash (includes expenses, excludes membership fees)", pos["derived_cash"]],
     ]
     sheet = add_sheet(wb, "Summary", ["Item", "Value"], summary_rows, first=True)
     for row in sheet.iter_rows(min_row=2, min_col=1, max_col=1):
@@ -155,6 +161,17 @@ def cycle_workbook(report):
             for p in inv["positions"]
         ],
         money_columns=(3, 4, 5, 6, 7, 8),
+    )
+
+    add_sheet(
+        wb, "Expenses",
+        ["Date", "Category", "Description", "Paid to", "Method", "Reference", "Amount", "Recorded by"],
+        [
+            [e.expense_date, e.get_category_display(), e.description, e.paid_to, e.get_payment_method_display(),
+             e.reference, e.amount, str(e.recorded_by)]
+            for e in exp["rows"]
+        ],
+        money_columns=(6,),
     )
 
     return to_bytes(wb)

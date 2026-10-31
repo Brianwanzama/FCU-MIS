@@ -31,7 +31,7 @@
       <div class="col-md-3"><small class="text-muted">Bonuses received</small><div class="fs-5 fw-semibold">{{ mine.distributions_paid|ugx }}</div></div>
     </div>
     <p class="small text-muted mt-3 mb-0">
-      Indicative: your accumulated deposits as a share of all members' deposits, applied to what the investments are worth.
+      Indicative: your total deposits over all cycles ({{ mine.my_deposits|ugx }}) as a share of every member's total deposits over all cycles ({{ mine.all_deposits|ugx }}), applied to what the investments are worth. Emergency contributions are not included.
       Profit shared as bonuses goes to Active members in Good Standing in proportion to their contributions (Manual 8.2, 8.3).
     </p>
     {% if mine.lines %}
@@ -56,6 +56,27 @@
     {% include "partials/chart_card.html" with chart_id="chart-returns" kind="returns" title="Total return on each investment" data=charts.returns empty=charts.returns.empty note="Earnings and growth in value, less fees, as a percentage of the money put in." %}
   </div>
 </div>
+
+{% if shares %}
+<div class="card fcu-card mb-4">
+  <div class="card-header">Each member's share of the investments</div>
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <thead><tr><th>Member</th><th class="text-end">Total deposits, all cycles</th><th class="text-end">Share of the pool</th><th class="text-end">Share of the investments</th></tr></thead>
+      <tbody>
+      {% for row in shares.rows %}
+        <tr><td>{{ row.member.member_code }} &middot; {{ row.member.full_name }}{% if row.member.status == "WITHDRAWN" %} <span class="badge text-bg-secondary">Withdrawn</span>{% endif %}</td>
+          <td class="text-end">{{ row.total|ugx }}</td><td class="text-end">{{ row.percent }}%</td><td class="text-end">{{ row.portfolio_share|ugx }}</td></tr>
+      {% empty %}
+        <tr><td colspan="4" class="text-center text-muted py-4">No deposits have been recorded yet.</td></tr>
+      {% endfor %}
+      </tbody>
+      {% if shares.rows %}<tfoot><tr><th>All members</th><th class="text-end">{{ shares.total|ugx }}</th><th class="text-end">100%</th><th class="text-end">{{ book.market_value|ugx }}</th></tr></tfoot>{% endif %}
+    </table>
+  </div>
+  <div class="card-body small text-muted border-top">A member's total deposits over all cycles divided by the total deposits of all members over all cycles. Emergency contributions and reversed payments are not counted; loan recoveries do not reduce it.</div>
+</div>
+{% endif %}
 
 <div class="card fcu-card">
   <div class="table-responsive">

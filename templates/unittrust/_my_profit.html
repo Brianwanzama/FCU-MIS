@@ -1,0 +1,10 @@
+<table class="table table-sm align-middle mb-0">
+  <thead><tr><th>Cycle</th><th class="text-end">My total deposits</th><th class="text-end">My relative contribution</th><th class="text-end">My profit</th></tr></thead>
+  <tbody>
+  {% for s in mine.shares %}
+    <tr><td>Cycle {{ s.statement.cycle.cycle_number }} ({{ s.statement.cycle.start_date|date:"M Y" }} to {{ s.statement.cycle.end_date|date:"M Y" }})</td>
+      <td class="text-end">{{ s.deposits|ugx }}</td><td class="text-end">{{ s.share_percent|floatformat:2 }}%</td><td class="text-end">{{ s.amount|ugx }}</td></tr>
+  {% endfor %}
+  </tbody>
+  <tfoot><tr><th colspan="3">Total profit shown to me</th><th class="text-end">{{ mine.total|ugx }}</th></tr></tfoot>
+</table>

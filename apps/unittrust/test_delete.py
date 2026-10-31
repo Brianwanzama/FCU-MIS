@@ -54,3 +54,35 @@ class DeleteInvestmentTests(InvestmentCase):
         r = self.client.post(f"/investments/{inv.pk}/delete/", {"reason": "typo"})
         self.assertEqual(r.status_code, 302)
         self.assertFalse(Investment.objects.filter(pk=inv.pk).exists())
+
+
+class ContributionShareTests(InvestmentCase):
+    def test_share_is_total_deposits_over_all_cycles_as_a_percent_of_everyones(self):
+        self.deposit(self.m1, "300000")
+        self.deposit(self.m2, "100000")
+        self.deposit(self.m3, "100000")
+        # Emergency contributions are never counted.
+        cs_record = __import__("apps.contributions.services", fromlist=["record_contribution"]).record_contribution
+        from apps.contributions.models import Contribution
+        cs_record(Contribution(member=self.m1, cycle=self.cycle, contribution_type="EMERGENCY", amount=Decimal("30000"),
+                               period_month=self.cycle.start_date, payment_date=timezone.localdate(),
+                               payment_method="CASH", recorded_by=self.admin), actor=self.admin)
+        data = services.contribution_shares()
+        self.assertEqual(data["total"], Decimal("500000"))
+        percents = {r["member"].pk: r["percent"] for r in data["rows"]}
+        self.assertEqual(percents[self.m1.pk], Decimal("60.00"))
+        self.assertEqual(percents[self.m2.pk], Decimal("20.00"))
+        mine = services.member_investment_summary(self.m1)
+        self.assertEqual(mine["share_percent"], Decimal("60.00"))
+        self.assertEqual(mine["my_deposits"], Decimal("300000"))
+        self.assertEqual(mine["all_deposits"], Decimal("500000"))
+
+    def test_officers_see_every_members_share_and_members_do_not(self):
+        self.deposit(self.m1, "300000")
+        self.deposit(self.m2, "100000")
+        self.client.force_login(self.treasurer)
+        page = self.client.get("/investments/")
+        self.assertContains(page, "Each member")
+        self.assertContains(page, "75.00%")
+        self.client.force_login(self.u1)
+        self.assertNotContains(self.client.get("/investments/"), "Each member")

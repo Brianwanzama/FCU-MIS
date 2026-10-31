@@ -147,3 +147,130 @@ class DistributionLine(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["distribution", "member"], name="one_line_per_member"),
         ]
+
+
+class ProfitStatement(models.Model):
+    """
+    The profit FCU made in a cycle, captured from the records: interest on loans, earnings on
+    unit trust, earnings on other investments, less expenses. Management captures (and re-captures)
+    it, then the Chairperson or Administrator publishes it; from then on every member can see their
+    own share, worked out from their relative contribution (total deposits over all cycles as a
+    percentage of everyone's). It is a statement of profit, not a payout: bonuses are still approved
+    and paid through a profit distribution.
+    """
+
+    cycle = models.OneToOneField("cycles.Cycle", on_delete=models.PROTECT, related_name="profit_statement")
+
+    loan_interest = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
+    unit_trust_income = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
+    other_investment_income = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
+    expenses = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
+    net_profit = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
+    pool_deposits = models.DecimalField(
+        max_digits=14, decimal_places=2, default=Decimal("0"),
+        help_text="Everyone's total deposits over all cycles when the shares were worked out.",
+    )
+
+    captured_at = models.DateTimeField()
+    captured_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    published_at = models.DateTimeField(null=True, blank=True)
+    published_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
+    )
+
+    class Meta:
+        ordering = ["-cycle__start_date"]
+
+    def __str__(self):
+        return f"Profit of {self.cycle}"
+
+    @property
+    def is_published(self):
+        return self.published_at is not None
+
+    @property
+    def gross_income(self):
+        """Income that is shared as profit: unit trust is paid out monthly as Other savings."""
+        return self.loan_interest + self.other_investment_income
+
+
+class ProfitShare(models.Model):
+    statement = models.ForeignKey(ProfitStatement, on_delete=models.CASCADE, related_name="shares")
+    member = models.ForeignKey("members.Member", on_delete=models.PROTECT, related_name="profit_shares")
+    deposits = models.DecimalField(max_digits=14, decimal_places=2, help_text="Total deposits over all cycles.")
+    share_percent = models.DecimalField(max_digits=9, decimal_places=4, default=Decimal("0"))
+    amount = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
+
+    class Meta:
+        ordering = ["member__member_code"]
+        constraints = [
+            models.UniqueConstraint(fields=["statement", "member"], name="one_profit_share_per_member"),
+        ]
+
+    def __str__(self):
+        return f"{self.member.member_code} {self.amount}"
+
+
+
+class InterestCredit(models.Model):
+    """
+    One month's unit trust earnings (earnings received less fees) shared among members by
+    relative contribution: each member's deposits up to the end of that month as a percentage of
+    everyone's. This is the members' "Other savings": it builds up each month and can be withdrawn.
+    """
+
+    month = models.DateField(unique=True, help_text="The first day of the month the earnings belong to.")
+    income = models.DecimalField(max_digits=14, decimal_places=2, help_text="Unit trust earnings less fees for the month.")
+    pool_deposits = models.DecimalField(max_digits=14, decimal_places=2)
+    credited_at = models.DateTimeField()
+    credited_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+
+    class Meta:
+        ordering = ["-month"]
+
+    def __str__(self):
+        return f"Unit trust interest {self.month:%B %Y}"
+
+
+class MemberInterest(models.Model):
+    credit = models.ForeignKey(InterestCredit, on_delete=models.CASCADE, related_name="lines")
+    member = models.ForeignKey("members.Member", on_delete=models.PROTECT, related_name="interest_credits")
+    deposits = models.DecimalField(max_digits=14, decimal_places=2)
+    share_percent = models.DecimalField(max_digits=9, decimal_places=4, default=Decimal("0"))
+    amount = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
+
+    class Meta:
+        ordering = ["member__member_code"]
+        constraints = [
+            models.UniqueConstraint(fields=["credit", "member"], name="one_interest_line_per_member"),
+        ]
+
+
+class InterestWithdrawal(models.Model):
+    """A member taking out the interest they have earned. The Treasurer pays it and records how."""
+
+    class Status(models.TextChoices):
+        REQUESTED = "REQUESTED", "Requested"
+        PAID = "PAID", "Paid"
+        REJECTED = "REJECTED", "Rejected"
+        CANCELLED = "CANCELLED", "Cancelled"
+
+    member = models.ForeignKey("members.Member", on_delete=models.PROTECT, related_name="interest_withdrawals")
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.REQUESTED)
+    requested_at = models.DateTimeField(auto_now_add=True)
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
+    )
+    payment_method = models.CharField(max_length=20, blank=True)
+    reference = models.CharField(max_length=100, blank=True)
+    note = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-requested_at"]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(amount__gt=0), name="interest_withdrawal_positive"),
+        ]

@@ -14,8 +14,14 @@ from django.utils import timezone
 from apps.contributions.models import Contribution
 from apps.contributions.services import cycle_contribution_summary, member_contribution_summary
 from apps.loans.models import Loan, LoanInstallment, LoanRepayment
+from apps.expenses.services import expense_summary, total_expenses
 from apps.members.models import Member
-from apps.unittrust.models import InvestmentTransaction, ProfitDistribution
+from apps.unittrust.models import (
+    InterestWithdrawal,
+    InvestmentTransaction,
+    MemberInterest,
+    ProfitDistribution,
+)
 from apps.unittrust.services import portfolio
 
 ZERO = Decimal("0")
@@ -121,9 +127,9 @@ def financial_position():
     """
     What FCU holds and owes to members, as of now.
 
-    The cash figure is DERIVED from every recorded movement of money. It does not
-    include expenses or membership fees, which the system does not record yet, so
-    compare it with the bank and cash balances before relying on it.
+    The cash figure is DERIVED from every recorded movement of money, including
+    expenses. It does not include membership fees, which the system does not record,
+    so compare it with the bank and cash balances before relying on it.
     """
 
     K = InvestmentTransaction.Kind
@@ -144,12 +150,17 @@ def financial_position():
         ProfitDistribution.objects.filter(status=ProfitDistribution.Status.PAID), "total_amount"
     )
 
+    interest_paid = _sum(InterestWithdrawal.objects.filter(status=InterestWithdrawal.Status.PAID))
+    interest_earned = _sum(MemberInterest.objects.all())
+
     cash = (
         deposits + emergency + cash_repaid
         + _sum(live_inv.filter(kind=K.REDEEM)) + _sum(live_inv.filter(kind=K.INCOME))
         - loans_out
         - _sum(live_inv.filter(kind=K.INVEST)) - _sum(live_inv.filter(kind=K.FEE))
         - paid_out_profit
+        - total_expenses()
+        - interest_paid
     )
 
     owed = sum(
@@ -161,6 +172,7 @@ def financial_position():
         "emergency_fund": emergency,
         "loans_receivable": owed,
         "investments": portfolio(include_closed=False)["market_value"],
+        "other_savings_owed": interest_earned - interest_paid,
         "derived_cash": cash,
     }
 
@@ -180,5 +192,6 @@ def cycle_report(cycle):
         "members": rows,
         "loans": loan_section(cycle),
         "investments": investment_section(cycle),
+        "expenses": expense_summary(cycle),
         "position": financial_position(),
     }

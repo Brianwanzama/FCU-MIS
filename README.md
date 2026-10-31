@@ -242,6 +242,60 @@ Run `python manage.py migrate`: adds `loans.0001` and `contributions.0004`.
   of the investments is shown for information but not added (it is funded by the deposits).
 - Run `python manage.py migrate`: adds `unittrust.0001`.
 
+## Expenses
+
+- **Expenses** (menu, `/expenses/`): the Treasurer or Administrator records what the unit spent
+  (category, description, amount, date, who was paid, method, receipt reference) against the
+  active cycle. Every cycle has its own list, totals and totals by category; pick the cycle at the
+  top. The Chairperson can view; edits need a reason and deletes (Treasurer, Chairperson,
+  Administrator) need a reason, with a copy kept in the audit log. A closed cycle's expenses are
+  read-only until the cycle is reopened.
+- Each cycle report (page, PDF and Excel) has an **Expenses** section, and the derived cash figure
+  now subtracts expenses. Run `python manage.py migrate`: adds `expenses.0001`.
+- **Share of the investments:** a member's share is their total deposits over all cycles as a
+  percentage of the total deposits of all members over all cycles. Emergency contributions and
+  reversed payments are not counted, and loan recoveries do not reduce it. Officers see every
+  member's share on the Investments page; each member sees their own. (Profit bonuses are still
+  worked out on deposits after loan recoveries, as agreed before.)
+
+## Profit by source, and each member's share
+
+- **Profit** (menu, `/investments/profit/`). For each cycle, management (Administrator, Treasurer,
+  Chairperson) sees the profit by source: 1) interest on loans (interest actually repaid on the
+  cycle's loans), 2) unit trust (earnings less fees), 3) other investments (microfinance, real estate;
+  earnings less fees), then less the cycle's expenses, giving the net profit. Changes in market value
+  are not counted until money is received.
+- The Treasurer or Administrator **captures** (and later **updates**) the statement, which works out
+  every member's share. The Chairperson or Administrator **publishes** it; updating withdraws it
+  until it is published again. Then each member sees only their own share on the same page: their
+  total deposits over all cycles, their relative contribution (a percentage of everyone's, emergency
+  excluded) and their profit. The breakdown by source and other members' shares stay with management.
+- This is a statement of profit, not a payout. Paying a bonus is still a profit distribution approved
+  with a General Meeting resolution. Run `python manage.py migrate`: adds `unittrust.0002`.
+
+## Other savings (unit trust interest for members)
+
+- **Other Savings** (menu, `/investments/other-savings/`) is the members' view of the unit trust.
+  Each month the Treasurer or Administrator records the unit trust earnings and fees on the unit
+  trust investment, then presses **Credit to members** for that month. The earnings less fees are
+  shared by relative contribution: each member's deposits up to the end of that month as a percentage
+  of everyone's (emergency excluded), so later deposits do not earn past interest. Recalculating a
+  month is allowed unless a member has already withdrawn or asked for more than the new figure.
+- A member sees what is **available to withdraw**, the total earned, what they have withdrawn, what
+  they can **expect each month** at their current share (from the latest month credited; an estimate,
+  not a promise), and what each extra UGX 100,000 saved would add. That figure is there to encourage
+  saving with FCU. The month-by-month history and their withdrawals are listed below.
+- **Withdrawing:** a member requests an amount up to what is available (whole shillings); the
+  Treasurer or Administrator pays it and records cash, bank or mobile money and a reference, or
+  rejects it with a reason. The member can cancel a request that has not been paid. Management
+  (Administrator, Treasurer, Chairperson) sees what is owed to each member, the open requests and
+  the months credited. Deleting a credit or a withdrawal record needs a reason and keeps an audit copy.
+- Unit trust earnings now reach members here, so the **profit statement no longer shares them
+  again**: profit to share is loan interest plus other investments, less expenses. The unit trust
+  line is still shown on the profit page for information.
+- The financial position in the cycle report shows **other savings owed to members**, and the derived
+  cash falls when interest is paid out. Run `python manage.py migrate`: adds `unittrust.0003`.
+
 ## Accounts, roles and passwords
 
 - **More than one role:** on *Users & Roles* the Administrator picks a main role and ticks
@@ -258,6 +312,7 @@ Run `python manage.py migrate`: adds `loans.0001` and `contributions.0004`.
 - **Delete everywhere:** contributions, loan records, investments, profit distributions,
   documents and members (a member with no financial history) can be deleted; a copy goes
   to the audit log. Cycles already had a guarded delete.
+- **Email:** set `BREVO_API_KEY` and `DEFAULT_FROM_EMAIL` to send password-reset emails over HTTPS (see docs/DEPLOYMENT.md); without them emails only print to the server log.
 - Run `python manage.py migrate`: adds `accounts.0005` and `loans.0003`.
 
 ## Reports and Excel exports (Manual 10.2)

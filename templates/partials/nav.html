@@ -43,6 +43,20 @@
                     </a>
                 </li>
 
+                <li class="nav-item">
+                    <a class="nav-link"
+                       href="{% url 'unittrust:other_savings' %}">
+                        Other Savings
+                    </a>
+                </li>
+
+                <li class="nav-item">
+                    <a class="nav-link"
+                       href="{% url 'unittrust:profit' %}">
+                        Profit
+                    </a>
+                </li>
+
                 {% if user.has_financial_view_access %}
                 <li class="nav-item">
                     <a class="nav-link"
@@ -101,6 +115,13 @@
                     <a class="nav-link"
                        href="{% url 'loans:register' %}">
                         Loan Register
+                    </a>
+                </li>
+
+                <li class="nav-item">
+                    <a class="nav-link"
+                       href="{% url 'expenses:list' %}">
+                        Expenses
                     </a>
                 </li>
 

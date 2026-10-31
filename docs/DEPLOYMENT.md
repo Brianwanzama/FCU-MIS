@@ -100,3 +100,21 @@ I cannot see Railway or the GitHub Actions run from here. After you deploy, chec
 - Log in as the Administrator, upload a signed form, redeploy, and confirm the file is
   still downloadable (proves the volume is attached).
 - Send a password reset to a real address (proves email works).
+
+## Email (password reset links)
+
+Without email settings the system only prints emails to the server log, so a member who uses
+"Forgot password" is told a link was sent but receives nothing. Railway's Hobby plan also blocks
+SMTP, so use an email service over HTTPS:
+
+1. Create a free account at brevo.com (300 emails a day) and, under Senders, add and verify the
+   address FCU will send from (a Gmail address works; click the link Brevo emails to it).
+2. Create an API key (SMTP & API, then API Keys).
+3. In Railway, Variables: `BREVO_API_KEY` = the key, `DEFAULT_FROM_EMAIL` = `FCU <the verified address>`.
+   Remove any `EMAIL_BACKEND` variable so the HTTPS sender is used. Redeploy.
+4. Test: use Forgot password with a member's email. If nothing arrives, the deploy log shows
+   "Brevo refused the email" with the reason.
+
+Members need an email on their record (Members, Edit) for a reset link to be possible. Until email
+works, the Administrator can give a temporary password from Users & Roles.
+
