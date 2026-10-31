@@ -258,6 +258,7 @@ Run `python manage.py migrate`: adds `loans.0001` and `contributions.0004`.
 - **Delete everywhere:** contributions, loan records, investments, profit distributions,
   documents and members (a member with no financial history) can be deleted; a copy goes
   to the audit log. Cycles already had a guarded delete.
+- **Email:** set `BREVO_API_KEY` and `DEFAULT_FROM_EMAIL` to send password-reset emails over HTTPS (see docs/DEPLOYMENT.md); without them emails only print to the server log.
 - Run `python manage.py migrate`: adds `accounts.0005` and `loans.0003`.
 
 ## Reports and Excel exports (Manual 10.2)

@@ -274,9 +274,18 @@ FCU_LOAN_RECOVERY_POLICY_REF = env.str(
 # Email
 # ---------------------------------------------------------------------
 
+# Email is sent over HTTPS when BREVO_API_KEY is set (works on hosts that block SMTP, such
+# as Railway's Hobby plan). Otherwise set EMAIL_BACKEND and the SMTP variables yourself;
+# with neither, emails are only printed to the log.
+BREVO_API_KEY = env("BREVO_API_KEY", default="")
+
 EMAIL_BACKEND = env(
     "EMAIL_BACKEND",
-    default="django.core.mail.backends.console.EmailBackend",
+    default=(
+        "apps.core.email_backends.BrevoEmailBackend"
+        if BREVO_API_KEY
+        else "django.core.mail.backends.console.EmailBackend"
+    ),
 )
 
 EMAIL_HOST = env("EMAIL_HOST", default="")

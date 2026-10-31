@@ -60,7 +60,7 @@ class Command(BaseCommand):
         console_mail = "console" in settings.EMAIL_BACKEND
         add(
             WARN if console_mail else OK, "Email is sent for real",
-            "Emails only print to the log, so password resets will not reach members." if console_mail else "",
+            "Emails only print to the log, so password resets will not reach members. Set BREVO_API_KEY and DEFAULT_FROM_EMAIL." if console_mail else "",
         )
 
         # --- Django's own deployment checks ------------------------------------
