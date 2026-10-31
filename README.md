@@ -258,6 +258,21 @@ Run `python manage.py migrate`: adds `loans.0001` and `contributions.0004`.
   member's share on the Investments page; each member sees their own. (Profit bonuses are still
   worked out on deposits after loan recoveries, as agreed before.)
 
+## Profit by source, and each member's share
+
+- **Profit** (menu, `/investments/profit/`). For each cycle, management (Administrator, Treasurer,
+  Chairperson) sees the profit by source: 1) interest on loans (interest actually repaid on the
+  cycle's loans), 2) unit trust (earnings less fees), 3) other investments (microfinance, real estate;
+  earnings less fees), then less the cycle's expenses, giving the net profit. Changes in market value
+  are not counted until money is received.
+- The Treasurer or Administrator **captures** (and later **updates**) the statement, which works out
+  every member's share. The Chairperson or Administrator **publishes** it; updating withdraws it
+  until it is published again. Then each member sees only their own share on the same page: their
+  total deposits over all cycles, their relative contribution (a percentage of everyone's, emergency
+  excluded) and their profit. The breakdown by source and other members' shares stay with management.
+- This is a statement of profit, not a payout. Paying a bonus is still a profit distribution approved
+  with a General Meeting resolution. Run `python manage.py migrate`: adds `unittrust.0002`.
+
 ## Accounts, roles and passwords
 
 - **More than one role:** on *Users & Roles* the Administrator picks a main role and ticks

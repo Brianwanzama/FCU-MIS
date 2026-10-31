@@ -43,6 +43,13 @@
                     </a>
                 </li>
 
+                <li class="nav-item">
+                    <a class="nav-link"
+                       href="{% url 'unittrust:profit' %}">
+                        Profit
+                    </a>
+                </li>
+
                 {% if user.has_financial_view_access %}
                 <li class="nav-item">
                     <a class="nav-link"

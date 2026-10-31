@@ -8,24 +8,30 @@ from django.utils import timezone
 from django.views import View
 
 from .forms import DistributionDraftForm, InvestmentForm, ReasonForm, TransactionForm
-from .models import Investment, InvestmentTransaction, ProfitDistribution
+from .models import Investment, InvestmentTransaction, ProfitDistribution, ProfitStatement
 from .services import (
     InvestmentError,
     approve_distribution,
     cancel_distribution,
+    capture_profit,
     close_investment,
     contribution_shares,
     create_investment,
+    delete_profit_statement,
     delete_distribution,
     delete_investment,
     delete_transaction,
     draft_distribution,
     mark_distribution_paid,
     member_investment_summary,
+    member_profit,
     portfolio,
     position,
+    profit_figures,
+    publish_profit,
     record_transaction,
     reverse_transaction,
+    unpublish_profit,
 )
 
 
@@ -322,3 +328,77 @@ class DistributionActionView(LoginRequiredMixin, View):
             messages.error(request, _messages(exc))
 
         return redirect("unittrust:distribution", pk=pk)
+
+
+
+class ProfitView(LoginRequiredMixin, View):
+    """
+    Management (Administrator, Treasurer, Chairperson) see the profit of a cycle by source and
+    every member's share. A member sees only their own share, and only of published statements.
+    """
+
+    def get(self, request):
+        from apps.cycles.models import Cycle
+
+        user = request.user
+
+        if not user.has_financial_view_access:
+            return render(request, "unittrust/profit_member.html", {
+                "mine": member_profit(user.member) if user.member_id else None})
+
+        cycles = Cycle.objects.exclude(status=Cycle.Status.UPCOMING).order_by("-start_date")
+        chosen = request.GET.get("cycle")
+        cycle = cycles.filter(pk=chosen).first() if chosen else None
+        cycle = cycle or cycles.filter(status=Cycle.Status.ACTIVE).first() or cycles.first()
+
+        statement = (
+            ProfitStatement.objects.filter(cycle=cycle)
+            .select_related("captured_by", "published_by").first() if cycle else None
+        )
+
+        return render(request, "unittrust/profit.html", {
+            "cycles": cycles,
+            "cycle": cycle,
+            "live": profit_figures(cycle) if cycle else None,
+            "statement": statement,
+            "shares": statement.shares.select_related("member") if statement else [],
+            "can_capture": user.has_financial_write_access,
+            "can_publish": user.has_chairperson_access,
+            "can_delete": user.can_delete_records,
+            "mine": member_profit(user.member) if user.member_id else None,
+        })
+
+
+class ProfitActionView(LoginRequiredMixin, View):
+    http_method_names = ["post"]
+
+    def post(self, request, pk, action):
+        from apps.cycles.models import Cycle
+
+        cycle = get_object_or_404(Cycle, pk=pk)
+        back = redirect(f"/investments/profit/?cycle={cycle.pk}")
+
+        try:
+            if action == "capture":
+                statement = capture_profit(cycle, request.user)
+                messages.success(
+                    request,
+                    "Profit captured. It is visible to management; publish it for members to see their share.",
+                )
+            else:
+                statement = get_object_or_404(ProfitStatement, cycle=cycle)
+                if action == "publish":
+                    publish_profit(statement, request.user)
+                    messages.success(request, "Published. Every member can now see their own share.")
+                elif action == "unpublish":
+                    unpublish_profit(statement, request.user)
+                    messages.success(request, "Withdrawn from members.")
+                elif action == "delete":
+                    delete_profit_statement(statement, request.user, request.POST.get("reason", ""))
+                    messages.success(request, "Profit statement deleted. A copy is kept in the audit log.")
+                else:
+                    raise PermissionDenied
+        except InvestmentError as exc:
+            messages.error(request, _messages(exc))
+
+        return back

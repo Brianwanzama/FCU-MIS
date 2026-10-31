@@ -147,3 +147,64 @@ class DistributionLine(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["distribution", "member"], name="one_line_per_member"),
         ]
+
+
+class ProfitStatement(models.Model):
+    """
+    The profit FCU made in a cycle, captured from the records: interest on loans, earnings on
+    unit trust, earnings on other investments, less expenses. Management captures (and re-captures)
+    it, then the Chairperson or Administrator publishes it; from then on every member can see their
+    own share, worked out from their relative contribution (total deposits over all cycles as a
+    percentage of everyone's). It is a statement of profit, not a payout: bonuses are still approved
+    and paid through a profit distribution.
+    """
+
+    cycle = models.OneToOneField("cycles.Cycle", on_delete=models.PROTECT, related_name="profit_statement")
+
+    loan_interest = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
+    unit_trust_income = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
+    other_investment_income = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
+    expenses = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
+    net_profit = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
+    pool_deposits = models.DecimalField(
+        max_digits=14, decimal_places=2, default=Decimal("0"),
+        help_text="Everyone's total deposits over all cycles when the shares were worked out.",
+    )
+
+    captured_at = models.DateTimeField()
+    captured_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    published_at = models.DateTimeField(null=True, blank=True)
+    published_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
+    )
+
+    class Meta:
+        ordering = ["-cycle__start_date"]
+
+    def __str__(self):
+        return f"Profit of {self.cycle}"
+
+    @property
+    def is_published(self):
+        return self.published_at is not None
+
+    @property
+    def gross_income(self):
+        return self.loan_interest + self.unit_trust_income + self.other_investment_income
+
+
+class ProfitShare(models.Model):
+    statement = models.ForeignKey(ProfitStatement, on_delete=models.CASCADE, related_name="shares")
+    member = models.ForeignKey("members.Member", on_delete=models.PROTECT, related_name="profit_shares")
+    deposits = models.DecimalField(max_digits=14, decimal_places=2, help_text="Total deposits over all cycles.")
+    share_percent = models.DecimalField(max_digits=9, decimal_places=4, default=Decimal("0"))
+    amount = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
+
+    class Meta:
+        ordering = ["member__member_code"]
+        constraints = [
+            models.UniqueConstraint(fields=["statement", "member"], name="one_profit_share_per_member"),
+        ]
+
+    def __str__(self):
+        return f"{self.member.member_code} {self.amount}"

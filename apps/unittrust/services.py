@@ -15,7 +15,14 @@ from apps.cycles.services import get_active_cycle
 from apps.members.models import Member
 from apps.members.services import member_available_savings
 
-from .models import DistributionLine, Investment, InvestmentTransaction, ProfitDistribution
+from .models import (
+    DistributionLine,
+    Investment,
+    InvestmentTransaction,
+    ProfitDistribution,
+    ProfitShare,
+    ProfitStatement,
+)
 
 T = InvestmentTransaction.Kind
 
@@ -646,3 +653,189 @@ def member_investment_summary(member):
         "lines": [l for l in lines if l.distribution.status in (
             ProfitDistribution.Status.APPROVED, ProfitDistribution.Status.PAID)],
     }
+
+
+
+# ============================================================
+# Profit statement: interest on loans, unit trust, other investments
+# ============================================================
+
+ZERO = Decimal("0")
+
+
+def profit_figures(cycle):
+    """
+    What FCU earned in `cycle`, from the live records, by source:
+
+    * interest on loans (the interest actually repaid on loans of the cycle),
+    * unit trust: earnings received less fees,
+    * other investments (microfinance, real estate): earnings received less fees,
+
+    and the expenses of the cycle. Net profit is the earnings less the expenses.
+    """
+
+    from django.db.models import Sum
+
+    from apps.expenses.services import expense_summary
+    from apps.reports.services import loan_section
+
+    live = InvestmentTransaction.objects.filter(cycle=cycle, reversed_at__isnull=True)
+
+    def net(kind_filter):
+        rows = live.filter(kind_filter)
+        income = rows.filter(kind=T.INCOME).aggregate(t=Sum("amount"))["t"] or ZERO
+        fees = rows.filter(kind=T.FEE).aggregate(t=Sum("amount"))["t"] or ZERO
+        return income - fees
+
+    from django.db.models import Q
+
+    unit_trust = net(Q(investment__kind=Investment.Kind.UNIT_TRUST))
+    other_rows = []
+    for kind, label in Investment.Kind.choices:
+        if kind == Investment.Kind.UNIT_TRUST:
+            continue
+        other_rows.append({"kind": kind, "label": label, "amount": net(Q(investment__kind=kind))})
+
+    loan_interest = loan_section(cycle)["interest_earned"]
+    other = sum((r["amount"] for r in other_rows), ZERO)
+    expenses = expense_summary(cycle)["total"]
+
+    return {
+        "loan_interest": loan_interest,
+        "unit_trust_income": unit_trust,
+        "other_investment_income": other,
+        "other_breakdown": other_rows,
+        "gross_income": loan_interest + unit_trust + other,
+        "expenses": expenses,
+        "net_profit": loan_interest + unit_trust + other - expenses,
+    }
+
+
+@transaction.atomic
+def capture_profit(cycle, actor):
+    """
+    Capture (or update) the cycle's profit statement and every member's share. Needs the
+    Treasurer or Administrator. Capturing again after changes replaces the figures and
+    withdraws the statement from members until it is published again.
+    """
+
+    _require(actor, "has_financial_write_access", "capture the profit statement")
+
+    if cycle.status == cycle.Status.UPCOMING:
+        raise InvestmentError("An upcoming cycle has no profit to capture.")
+
+    figures = profit_figures(cycle)
+    shares = contribution_shares()
+    distributable = max(figures["net_profit"], ZERO)
+    amounts = split_proportionally(
+        distributable, {row["member"].pk: row["total"] for row in shares["rows"]}
+    )
+
+    statement = ProfitStatement.objects.select_for_update().filter(cycle=cycle).first()
+    was_published = bool(statement and statement.is_published)
+    created = statement is None
+
+    if created:
+        statement = ProfitStatement(cycle=cycle)
+
+    statement.loan_interest = figures["loan_interest"]
+    statement.unit_trust_income = figures["unit_trust_income"]
+    statement.other_investment_income = figures["other_investment_income"]
+    statement.expenses = figures["expenses"]
+    statement.net_profit = figures["net_profit"]
+    statement.pool_deposits = shares["total"]
+    statement.captured_at = timezone.now()
+    statement.captured_by = actor
+    statement.published_at = None
+    statement.published_by = None
+    statement.save()
+
+    statement.shares.all().delete()
+    ProfitShare.objects.bulk_create(
+        ProfitShare(
+            statement=statement,
+            member=row["member"],
+            deposits=row["total"],
+            share_percent=(row["ratio"] * 100).quantize(Decimal("0.0001")),
+            amount=amounts.get(row["member"].pk, ZERO),
+        )
+        for row in shares["rows"]
+    )
+
+    log_action(
+        AuditLog.Action.CREATE if created else AuditLog.Action.UPDATE,
+        instance=statement,
+        actor=actor,
+        new_value={
+            "event": "PROFIT_CAPTURED",
+            "loan_interest": str(statement.loan_interest),
+            "unit_trust_income": str(statement.unit_trust_income),
+            "other_investment_income": str(statement.other_investment_income),
+            "expenses": str(statement.expenses),
+            "net_profit": str(statement.net_profit),
+            "withdrawn_from_members": was_published,
+        },
+    )
+
+    return statement
+
+
+@transaction.atomic
+def publish_profit(statement, actor):
+    """Make the statement visible to every member (Chairperson or Administrator)."""
+
+    _require(actor, "has_chairperson_access", "publish the profit statement")
+
+    statement = ProfitStatement.objects.select_for_update().get(pk=statement.pk)
+    statement.published_at = timezone.now()
+    statement.published_by = actor
+    statement.save(update_fields=["published_at", "published_by"])
+
+    log_action(
+        AuditLog.Action.STATUS_CHANGE, instance=statement, actor=actor,
+        new_value={"event": "PROFIT_PUBLISHED", "net_profit": str(statement.net_profit)},
+    )
+    return statement
+
+
+@transaction.atomic
+def unpublish_profit(statement, actor):
+    _require(actor, "has_chairperson_access", "withdraw the profit statement")
+
+    statement = ProfitStatement.objects.select_for_update().get(pk=statement.pk)
+    statement.published_at = None
+    statement.published_by = None
+    statement.save(update_fields=["published_at", "published_by"])
+
+    log_action(
+        AuditLog.Action.STATUS_CHANGE, instance=statement, actor=actor,
+        new_value={"event": "PROFIT_UNPUBLISHED"},
+    )
+    return statement
+
+
+@transaction.atomic
+def delete_profit_statement(statement, actor, reason):
+    _require(actor, "can_delete_records", "delete profit statements")
+    reason = _delete_reason(reason)
+
+    statement = ProfitStatement.objects.get(pk=statement.pk)
+
+    log_action(
+        AuditLog.Action.DELETE, instance=statement, actor=actor,
+        old_value={"cycle": str(statement.cycle), "net_profit": str(statement.net_profit),
+                   "published": statement.is_published},
+        new_value={"event": "PROFIT_STATEMENT_DELETED", "reason": reason},
+    )
+    statement.delete()
+
+
+def member_profit(member):
+    """The member's share in every published profit statement, newest first, and their total."""
+
+    shares = list(
+        ProfitShare.objects.filter(member=member, statement__published_at__isnull=False)
+        .select_related("statement__cycle")
+        .order_by("-statement__cycle__start_date")
+    )
+    return {"shares": shares, "total": sum((s.amount for s in shares), ZERO)}

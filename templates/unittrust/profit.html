@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Profit{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+  <h1 class="mb-0">Profit</h1>
+  <form method="get">
+    <select name="cycle" class="form-select form-select-sm" onchange="this.form.submit()" aria-label="Cycle">
+      {% for c in cycles %}
+        <option value="{{ c.pk }}" {% if cycle and c.pk == cycle.pk %}selected{% endif %}>Cycle {{ c.cycle_number }} ({{ c.get_status_display }})</option>
+      {% endfor %}
+    </select>
+  </form>
+</div>
+
+{% if not cycle %}
+  <div class="alert alert-light border">There is no cycle yet.</div>
+{% else %}
+  <p class="text-muted">Cycle {{ cycle.cycle_number }} &middot; {{ cycle.name }} ({{ cycle.start_date|date:"d M Y" }} to {{ cycle.end_date|date:"d M Y" }}).
+    This page is for management. Members see only their own share, once it is published.</p>
+
+  <div class="card fcu-card mb-4">
+    <div class="card-header">Where the profit comes from (live from the records)</div>
+    <div class="table-responsive"><table class="table align-middle mb-0">
+      <tbody>
+        <tr><td>1. Interest on loans</td><td class="text-end">{{ live.loan_interest|ugx }}</td></tr>
+        <tr><td>2. Unit trust (earnings less fees)</td><td class="text-end">{{ live.unit_trust_income|ugx }}</td></tr>
+        <tr><td>3. Other investments (earnings less fees)</td><td class="text-end">{{ live.other_investment_income|ugx }}</td></tr>
+        {% for row in live.other_breakdown %}
+          <tr class="small text-muted"><td class="ps-4">{{ row.label }}</td><td class="text-end">{{ row.amount|ugx }}</td></tr>
+        {% endfor %}
+        <tr class="fw-semibold"><td>Total income</td><td class="text-end">{{ live.gross_income|ugx }}</td></tr>
+        <tr><td>Less expenses of the cycle</td><td class="text-end">{{ live.expenses|ugx }}</td></tr>
+        <tr class="fw-semibold table-light"><td>Net profit</td><td class="text-end">{{ live.net_profit|ugx }}</td></tr>
+      </tbody>
+    </table></div>
+    <div class="card-body small text-muted border-top">
+      Interest on loans is the interest actually repaid on loans of this cycle. Investment earnings are the earnings received
+      less fees recorded in this cycle; changes in market value are not counted until money is received.
+    </div>
+  </div>
+
+  <div class="card fcu-card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <span>Statement for members</span>
+      {% if statement %}
+        {% if statement.is_published %}<span class="badge text-bg-success">Published {{ statement.published_at|date:"d M Y H:i" }}</span>
+        {% else %}<span class="badge text-bg-warning">Captured, not yet visible to members</span>{% endif %}
+      {% else %}<span class="badge text-bg-secondary">Not captured yet</span>{% endif %}
+    </div>
+    <div class="card-body">
+      {% if statement %}
+        <p class="mb-2">Captured {{ statement.captured_at|date:"d M Y H:i" }} by {{ statement.captured_by }}:
+          net profit <strong>{{ statement.net_profit|ugx }}</strong> shared by relative contribution
+          (total deposits over all cycles, {{ statement.pool_deposits|ugx }} in all; emergency excluded).</p>
+        {% if statement.net_profit <= 0 %}<div class="alert alert-warning py-2">There is no profit to share this cycle.</div>{% endif %}
+      {% else %}
+        <p class="text-muted">Capture the figures above to work out each member's share.</p>
+      {% endif %}
+      <div class="d-flex flex-wrap gap-2">
+        {% if can_capture %}
+          <form method="post" action="{% url 'unittrust:profit_action' cycle.pk 'capture' %}"
+                {% if statement.is_published %}onsubmit="return confirm('Updating withdraws the published statement until it is published again. Continue?');"{% endif %}>
+            {% csrf_token %}
+            <button class="btn btn-fcu-primary" type="submit">{% if statement %}Update from the latest records{% else %}Capture profit{% endif %}</button>
+          </form>
+        {% endif %}
+        {% if statement and can_publish %}
+          {% if statement.is_published %}
+            <form method="post" action="{% url 'unittrust:profit_action' cycle.pk 'unpublish' %}">{% csrf_token %}
+              <button class="btn btn-outline-secondary" type="submit">Withdraw from members</button></form>
+          {% else %}
+            <form method="post" action="{% url 'unittrust:profit_action' cycle.pk 'publish' %}">{% csrf_token %}
+              <button class="btn btn-success" type="submit">Publish to members</button></form>
+          {% endif %}
+        {% endif %}
+        {% if statement and can_delete %}
+          <form method="post" class="d-flex gap-1" action="{% url 'unittrust:profit_action' cycle.pk 'delete' %}"
+                onsubmit="return confirm('Delete this profit statement?');">{% csrf_token %}
+            <input type="text" name="reason" class="form-control form-control-sm" placeholder="Reason" required>
+            <button class="btn btn-sm btn-danger" type="submit">Delete</button></form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {% if statement %}
+  <div class="card fcu-card mb-4">
+    <div class="card-header">Each member's share of the profit</div>
+    <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+      <thead><tr><th>Member</th><th class="text-end">Total deposits, all cycles</th><th class="text-end">Relative contribution</th><th class="text-end">Profit share</th></tr></thead>
+      <tbody>
+      {% for s in shares %}
+        <tr><td>{{ s.member.member_code }} &middot; {{ s.member.full_name }}</td><td class="text-end">{{ s.deposits|ugx }}</td>
+          <td class="text-end">{{ s.share_percent|floatformat:2 }}%</td><td class="text-end">{{ s.amount|ugx }}</td></tr>
+      {% endfor %}
+      </tbody>
+      <tfoot><tr><th>All members</th><th class="text-end">{{ statement.pool_deposits|ugx }}</th><th class="text-end">100%</th>
+        <th class="text-end">{% if statement.net_profit > 0 %}{{ statement.net_profit|ugx }}{% else %}{{ 0|ugx }}{% endif %}</th></tr></tfoot>
+    </table></div>
+    <div class="card-body small text-muted border-top">
+      This is each member's share of the profit. Paying it out as a bonus is a separate step under
+      <a href="{% url 'unittrust:distributions' %}">Profit distributions</a>, approved with a General Meeting resolution.
+    </div>
+  </div>
+  {% endif %}
+
+  {% if mine and mine.shares %}
+    <div class="card fcu-card"><div class="card-header">My profit</div><div class="card-body">
+      {% include "unittrust/_my_profit.html" %}
+    </div></div>
+  {% endif %}
+{% endif %}
+{% endblock %}

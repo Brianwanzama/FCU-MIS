@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}My profit{% endblock %}
+
+{% block content %}
+<h1 class="mb-3">My profit</h1>
+<p class="text-muted">Your share of the profit FCU made from interest on loans and from its investments, after expenses.
+  It is worked out from your relative contribution: your total deposits over all cycles as a percentage of all members' total
+  deposits over all cycles (emergency contributions are not included).</p>
+
+{% if mine and mine.shares %}
+  <div class="card fcu-card"><div class="card-body">{% include "unittrust/_my_profit.html" %}</div></div>
+  <p class="small text-muted mt-3">Paying a share out as a bonus is decided by the General Meeting and shows under Investments when approved.</p>
+{% else %}
+  <div class="alert alert-light border">No profit has been published yet. Management shares it here once each cycle's figures are updated.</div>
+{% endif %}
+{% endblock %}
