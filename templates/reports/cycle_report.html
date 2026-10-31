@@ -18,7 +18,7 @@
 <h1 class="mb-1">Financial report</h1>
 <p class="text-muted">Cycle {{ cycle.cycle_number }} &middot; {{ cycle.name }} ({{ cycle.start_date|date:"d M Y" }} to {{ cycle.end_date|date:"d M Y" }}) &middot; {{ cycle.get_status_display }}<br>Prepared {{ report.generated_at|date:"d M Y H:i" }}</p>
 
-{% with c=report.contributions loans=report.loans inv=report.investments pos=report.position %}
+{% with c=report.contributions loans=report.loans inv=report.investments pos=report.position exp=report.expenses %}
 
 <div class="row g-3 mb-4 no-print">
   <div class="col-lg-8">
@@ -61,15 +61,27 @@
   <div class="card-body small text-muted border-top">This cycle: invested {{ inv.invested_in_cycle|ugx }}; earnings {{ inv.income_in_cycle|ugx }}; profit shared with members {{ inv.distributed|ugx }}.</div>
 </div>
 
-<h2 class="h5">4. Financial position (as of now)</h2>
+<h2 class="h5">4. Expenses</h2>
+<div class="card fcu-card mb-4"><div class="table-responsive"><table class="table mb-0">
+  <thead><tr><th>Category</th><th class="text-end">Items</th><th class="text-end">Spent</th></tr></thead>
+  <tbody>
+  {% for row in exp.by_category %}<tr><td>{{ row.label }}</td><td class="text-end">{{ row.count }}</td><td class="text-end">{{ row.total|ugx }}</td></tr>
+  {% empty %}<tr><td colspan="3" class="text-center text-muted">No expenses recorded in this cycle.</td></tr>{% endfor %}
+  </tbody>
+  {% if exp.by_category %}<tfoot><tr><th>Total</th><th class="text-end">{{ exp.count }}</th><th class="text-end">{{ exp.total|ugx }}</th></tr></tfoot>{% endif %}
+</table></div>
+  <div class="card-body small text-muted border-top">Compare with the interest earned on loans ({{ loans.interest_earned|ugx }}) and earnings on investments ({{ inv.income_in_cycle|ugx }}) in this cycle. The full list is under <a href="{% url 'expenses:list' %}?cycle={{ cycle.pk }}">Expenses</a>.</div>
+</div>
+
+<h2 class="h5">5. Financial position (as of now)</h2>
 <div class="card fcu-card mb-4"><div class="table-responsive"><table class="table mb-0">
   <thead><tr><th class="text-end">Members' deposits</th><th class="text-end">Emergency fund</th><th class="text-end">Loans receivable</th><th class="text-end">Investments</th><th class="text-end">Derived cash*</th></tr></thead>
   <tbody><tr><td class="text-end">{{ pos.members_deposits|ugx }}</td><td class="text-end">{{ pos.emergency_fund|ugx }}</td><td class="text-end">{{ pos.loans_receivable|ugx }}</td><td class="text-end">{{ pos.investments|ugx }}</td><td class="text-end">{{ pos.derived_cash|ugx }}</td></tr></tbody>
 </table></div>
-  <div class="card-body small text-muted border-top">*Worked out from every recorded movement of money. Expenses and membership fees are not recorded in the system yet, so check this against the bank and cash balances.</div>
+  <div class="card-body small text-muted border-top">*Worked out from every recorded movement of money. Expenses are included; membership fees are not recorded in the system, so check this against the bank and cash balances.</div>
 </div>
 
-<h2 class="h5">5. Members</h2>
+<h2 class="h5">6. Members</h2>
 <div class="card fcu-card"><div class="table-responsive"><table class="table table-sm align-middle mb-0">
   <thead><tr><th>Member</th><th>Status</th><th class="text-end">Deposit target</th><th class="text-end">Paid</th><th class="text-end">Recovered</th><th class="text-end">Outstanding</th><th class="text-end">Emergency paid</th><th>Target</th></tr></thead>
   <tbody>

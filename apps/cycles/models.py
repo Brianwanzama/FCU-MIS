@@ -124,6 +124,7 @@ class Cycle(models.Model):
     # no guard at all, so the list is explicit rather than introspected.
     # ------------------------------------------------------------------
     PROTECTED_RELATIONS = (
+        "expenses",
         # "contributions",   # Phase 3
         # "ledger_entries",  # Phase 4 (General Ledger)
         # "loans",           # Phase 5

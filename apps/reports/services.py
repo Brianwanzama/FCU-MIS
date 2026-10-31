@@ -14,6 +14,7 @@ from django.utils import timezone
 from apps.contributions.models import Contribution
 from apps.contributions.services import cycle_contribution_summary, member_contribution_summary
 from apps.loans.models import Loan, LoanInstallment, LoanRepayment
+from apps.expenses.services import expense_summary, total_expenses
 from apps.members.models import Member
 from apps.unittrust.models import InvestmentTransaction, ProfitDistribution
 from apps.unittrust.services import portfolio
@@ -121,9 +122,9 @@ def financial_position():
     """
     What FCU holds and owes to members, as of now.
 
-    The cash figure is DERIVED from every recorded movement of money. It does not
-    include expenses or membership fees, which the system does not record yet, so
-    compare it with the bank and cash balances before relying on it.
+    The cash figure is DERIVED from every recorded movement of money, including
+    expenses. It does not include membership fees, which the system does not record,
+    so compare it with the bank and cash balances before relying on it.
     """
 
     K = InvestmentTransaction.Kind
@@ -150,6 +151,7 @@ def financial_position():
         - loans_out
         - _sum(live_inv.filter(kind=K.INVEST)) - _sum(live_inv.filter(kind=K.FEE))
         - paid_out_profit
+        - total_expenses()
     )
 
     owed = sum(
@@ -180,5 +182,6 @@ def cycle_report(cycle):
         "members": rows,
         "loans": loan_section(cycle),
         "investments": investment_section(cycle),
+        "expenses": expense_summary(cycle),
         "position": financial_position(),
     }

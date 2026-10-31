@@ -16,6 +16,7 @@ urlpatterns = [
     path("contributions/", include("apps.contributions.urls")),
     path("loans/", include("apps.loans.urls")),
     path("investments/", include("apps.unittrust.urls")),
+    path("expenses/", include("apps.expenses.urls")),
     path("reports/", include("apps.reports.urls")),
 
     # Dashboard

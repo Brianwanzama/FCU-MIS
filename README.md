@@ -242,6 +242,22 @@ Run `python manage.py migrate`: adds `loans.0001` and `contributions.0004`.
   of the investments is shown for information but not added (it is funded by the deposits).
 - Run `python manage.py migrate`: adds `unittrust.0001`.
 
+## Expenses
+
+- **Expenses** (menu, `/expenses/`): the Treasurer or Administrator records what the unit spent
+  (category, description, amount, date, who was paid, method, receipt reference) against the
+  active cycle. Every cycle has its own list, totals and totals by category; pick the cycle at the
+  top. The Chairperson can view; edits need a reason and deletes (Treasurer, Chairperson,
+  Administrator) need a reason, with a copy kept in the audit log. A closed cycle's expenses are
+  read-only until the cycle is reopened.
+- Each cycle report (page, PDF and Excel) has an **Expenses** section, and the derived cash figure
+  now subtracts expenses. Run `python manage.py migrate`: adds `expenses.0001`.
+- **Share of the investments:** a member's share is their total deposits over all cycles as a
+  percentage of the total deposits of all members over all cycles. Emergency contributions and
+  reversed payments are not counted, and loan recoveries do not reduce it. Officers see every
+  member's share on the Investments page; each member sees their own. (Profit bonuses are still
+  worked out on deposits after loan recoveries, as agreed before.)
+
 ## Accounts, roles and passwords
 
 - **More than one role:** on *Users & Roles* the Administrator picks a main role and ticks

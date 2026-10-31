@@ -573,18 +573,55 @@ def cancel_distribution(distribution, actor, reason):
 # A member's own picture
 # ============================================================
 
-def member_investment_summary(member):
+def contribution_shares():
     """
-    The member's share of FCU's investments (indicative: their proportion of all
-    members' accumulated deposits applied to the portfolio's value) and the
-    bonuses they have received or are due.
+    Each member's share of the pool: their total deposits across ALL cycles (reversed
+    payments left out, emergency contributions never counted) as a percentage of the
+    total deposits of all members in all cycles.
+
+    Returns {"total": Decimal, "rows": [{"member", "total", "percent"}]}, one row per member
+    who has paid deposits, in member order.
     """
 
-    deposits = {m.pk: max(member_available_savings(m), Decimal("0"))
-                for m in Member.objects.exclude(status=Member.Status.WITHDRAWN)}
-    total = sum(deposits.values(), Decimal("0"))
-    mine = deposits.get(member.pk, Decimal("0"))
-    share = (mine / total) if total else Decimal("0")
+    from django.db.models import Sum
+
+    from apps.contributions.models import Contribution
+
+    totals = dict(
+        Contribution.objects.filter(
+            contribution_type=Contribution.ContributionType.MONTHLY, reversed_at__isnull=True
+        )
+        .values_list("member_id")
+        .annotate(total=Sum("amount"))
+        .values_list("member_id", "total")
+    )
+    pool = sum(totals.values(), Decimal("0"))
+
+    rows = [
+        {
+            "member": member,
+            "total": totals[member.pk],
+            "percent": (totals[member.pk] / pool * 100).quantize(Decimal("0.01")) if pool else Decimal("0"),
+            "ratio": totals[member.pk] / pool if pool else Decimal("0"),
+        }
+        for member in Member.objects.filter(pk__in=totals).order_by("member_code")
+    ]
+
+    return {"total": pool, "rows": rows}
+
+
+def member_investment_summary(member):
+    """
+    The member's share of FCU's investments (indicative: their total deposits over all
+    cycles as a proportion of every member's total deposits over all cycles, applied to
+    the portfolio's value) and the bonuses they have received or are due.
+    """
+
+    shares = contribution_shares()
+    mine_row = next((r for r in shares["rows"] if r["member"].pk == member.pk), None)
+    mine = mine_row["total"] if mine_row else Decimal("0")
+    share = mine_row["ratio"] if mine_row else Decimal("0")
+    total = shares["total"]
 
     book = portfolio(include_closed=False)
     unit_trust_value = sum(
@@ -598,6 +635,8 @@ def member_investment_summary(member):
         return sum((l.amount for l in lines if l.distribution.status == status), Decimal("0"))
 
     return {
+        "my_deposits": mine,
+        "all_deposits": total,
         "share_percent": (share * 100).quantize(Decimal("0.01")),
         "portfolio_value": book["market_value"],
         "portfolio_share": (book["market_value"] * share).quantize(Decimal("1")),

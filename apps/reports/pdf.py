@@ -101,7 +101,15 @@ def render_cycle_pdf(report, organisation="Financial Cycle Unit (FCU)"):
             f"This cycle: invested {ugx(inv['invested_in_cycle'])}; earnings {ugx(inv['income_in_cycle'])}; "
             f"profit shared with members {ugx(inv['distributed'])}.", small,
         ),
-        Paragraph("4. Financial position (as of now)", h2),
+        Paragraph("4. Expenses", h2),
+        _table(
+            [["Category", "Items", "Spent"]]
+            + [[row["label"], str(row["count"]), ugx(row["total"])] for row in report["expenses"]["by_category"]]
+            + [["Total", str(report["expenses"]["count"]), ugx(report["expenses"]["total"])]],
+            [120 * mm, 40 * mm, 60 * mm],
+            right_from=1, total_row=True,
+        ),
+        Paragraph("5. Financial position (as of now)", h2),
         _table(
             [
                 ["Members' deposits", "Emergency fund", "Loans receivable", "Investments", "Derived cash*"],
@@ -112,11 +120,11 @@ def render_cycle_pdf(report, organisation="Financial Cycle Unit (FCU)"):
             right_from=0,
         ),
         Paragraph(
-            "*Worked out from every recorded movement of money. Expenses and membership fees are not recorded "
-            "in the system yet, so check this against the bank and cash balances.", small,
+            "*Worked out from every recorded movement of money, including expenses. Membership fees are not "
+            "recorded in the system, so check this against the bank and cash balances.", small,
         ),
         PageBreak(),
-        Paragraph("5. Members", h2),
+        Paragraph("6. Members", h2),
     ]
 
     rows = [["Member", "Name", "Status", "Deposit target", "Paid", "Recovered", "Outstanding",

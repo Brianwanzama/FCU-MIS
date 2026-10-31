@@ -73,7 +73,7 @@ LOCAL_APPS = [
     # "apps.repayments",
     "apps.unittrust",
     # "apps.emergencyfund",
-    # "apps.expenses",
+    "apps.expenses",
     # "apps.orgsettings",
     "apps.reports",
 ]

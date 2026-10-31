@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
@@ -12,6 +14,7 @@ from .services import (
     approve_distribution,
     cancel_distribution,
     close_investment,
+    contribution_shares,
     create_investment,
     delete_distribution,
     delete_investment,
@@ -28,6 +31,15 @@ from .services import (
 
 def _messages(exc):
     return " ".join(exc.messages) if hasattr(exc, "messages") else str(exc)
+
+
+def _shares_with_value(book):
+    """Every member's share of the pool, with what that share of the investments is worth."""
+
+    data = contribution_shares()
+    for row in data["rows"]:
+        row["portfolio_share"] = (book["market_value"] * row["ratio"]).quantize(Decimal("1"))
+    return data
 
 
 class PortfolioView(LoginRequiredMixin, View):
@@ -55,6 +67,7 @@ class PortfolioView(LoginRequiredMixin, View):
                 "charts": {"allocation": allocation, "returns": returns},
                 "book": book,
                 "mine": member_investment_summary(user.member) if user.member_id else None,
+                "shares": _shares_with_value(book) if user.has_financial_view_access else None,
             },
         )
 

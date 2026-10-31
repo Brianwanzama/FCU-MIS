@@ -125,7 +125,7 @@ class ExcelTests(ReportCase):
     def test_cycle_workbook_has_the_sheets_and_numbers(self):
         self.pay(self.m1, "600000")
         wb = self.open(excel.cycle_workbook(services.cycle_report(self.cycle)))
-        self.assertEqual(wb.sheetnames, ["Summary", "Members", "Loans", "Investments"])
+        self.assertEqual(wb.sheetnames, ["Summary", "Members", "Loans", "Investments", "Expenses"])
         values = {row[0].value: row[1].value for row in wb["Summary"].iter_rows(min_row=2)}
         self.assertEqual(values["Deposits collected"], 600000)
         member_row = [r for r in wb["Members"].iter_rows(min_row=2, values_only=True) if r[0] == self.m1.member_code][0]
