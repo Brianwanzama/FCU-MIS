@@ -4,46 +4,45 @@
 {% block content %}
 <h1 class="mb-1">Other savings</h1>
 <p class="text-muted">
-  Part of FCU's money is invested in a unit trust, and the interest it earns is shared with members every month
-  in proportion to what each member has saved with FCU. Money left in a bank account earns nothing like this.
-  The interest you earn here is yours and can be withdrawn at any time.
+  Other savings is extra money you save with FCU, apart from your regular monthly deposits. FCU places it in the unit trust,
+  and the interest it earns is credited to you every month. Money kept in a bank account earns nothing like this. Your regular
+  deposits and the group's own unit trust earnings are not affected. The interest you earn can be withdrawn at any time.
 </p>
 
 {% if mine %}
   {% with b=mine.balance %}
   <div class="row g-3 mb-4">
     <div class="col-6 col-lg-3"><div class="card fcu-card h-100"><div class="card-body">
-      <small class="text-muted text-uppercase">Available to withdraw</small>
-      <div class="fs-4 fw-semibold">{{ b.available|ugx }}</div></div></div></div>
+      <small class="text-muted text-uppercase">My Other savings</small>
+      <div class="fs-4 fw-semibold">{{ mine.principal|ugx }}</div></div></div></div>
     <div class="col-6 col-lg-3"><div class="card fcu-card h-100"><div class="card-body">
-      <small class="text-muted text-uppercase">Total interest earned</small>
-      <div class="fs-4 fw-semibold">{{ b.earned|ugx }}</div>
-      <div class="small text-muted">over {{ mine.months_credited }} month{{ mine.months_credited|pluralize }}</div></div></div></div>
-    <div class="col-6 col-lg-3"><div class="card fcu-card h-100"><div class="card-body">
-      <small class="text-muted text-uppercase">Already withdrawn</small>
-      <div class="fs-4 fw-semibold">{{ b.withdrawn|ugx }}</div>
-      {% if b.pending %}<div class="small text-muted">plus {{ b.pending|ugx }} requested</div>{% endif %}</div></div></div>
+      <small class="text-muted text-uppercase">Interest available to withdraw</small>
+      <div class="fs-4 fw-semibold">{{ b.available|ugx }}</div>
+      <div class="small text-muted">earned {{ b.earned|ugx }}{% if b.withdrawn %}, withdrawn {{ b.withdrawn|ugx }}{% endif %}{% if b.pending %}, requested {{ b.pending|ugx }}{% endif %}</div></div></div></div>
     <div class="col-6 col-lg-3"><div class="card fcu-card h-100 border-primary"><div class="card-body">
       <small class="text-muted text-uppercase">Expected each month</small>
       <div class="fs-4 fw-semibold">{{ mine.estimate_monthly|ugx }}</div>
-      <div class="small text-muted">at your {{ mine.share_percent }}% share</div></div></div></div>
+      <div class="small text-muted">at your current savings</div></div></div></div>
+    <div class="col-6 col-lg-3"><div class="card fcu-card h-100"><div class="card-body">
+      <small class="text-muted text-uppercase">Months credited</small>
+      <div class="fs-4 fw-semibold">{{ mine.months_credited }}</div></div></div></div>
   </div>
+  {% endwith %}
 
   <div class="card fcu-card mb-4">
     <div class="card-header">Save more, earn more</div>
     <div class="card-body">
       {% if mine.latest %}
-        <p class="mb-2">Your deposits so far are <strong>{{ mine.my_deposits|ugx }}</strong>. In {{ mine.latest.month|date:"F Y" }} the unit trust
-          earned <strong>{{ mine.latest.income|ugx }}</strong> for all members, so at your current savings you would receive about
-          <strong>{{ mine.estimate_monthly|ugx }}</strong> a month.</p>
-        <p class="mb-2">Every extra <strong>UGX 100,000</strong> you save adds about <strong>{{ mine.per_100k|ugx }}</strong> a month at that rate.
-          {% if mine.average_monthly %}Your average credit so far is {{ mine.average_monthly|ugx }} a month.{% endif %}</p>
+        <p class="mb-2">In {{ mine.latest.month|date:"F Y" }} the Other savings earned <strong>{{ mine.monthly_rate_percent }}%</strong>.
+          At that rate your {{ mine.principal|ugx }} would earn about <strong>{{ mine.estimate_monthly|ugx }}</strong> a month.</p>
+        <p class="mb-2">Every extra <strong>UGX 100,000</strong> you save adds about <strong>{{ mine.per_100k|ugx }}</strong> a month.
+          {% if mine.average_monthly %}You have earned {{ mine.average_monthly|ugx }} a month on average so far.{% endif %}</p>
       {% else %}
-        <p class="mb-2">No interest has been credited yet. Once the Treasurer records the unit trust earnings for a month, you will see
-          here what you receive and what each extra UGX 100,000 you save would add.</p>
+        <p class="mb-2">No interest has been credited yet. Once the Treasurer credits a month, you will see here the rate it earned, what you
+          would receive each month, and what each extra UGX 100,000 you save would add.</p>
       {% endif %}
-      <p class="small text-muted mb-0">This is an estimate from the latest month, not a promise: unit trust earnings go up and down, and
-        what you get depends on how much the unit trust earns and on your savings compared with everyone else's. Only deposits count, not emergency contributions.</p>
+      <p class="small text-muted mb-0">This is an estimate from the latest month, not a promise: unit trust earnings go up and down. Interest
+        is counted on the days your money is with FCU, so the sooner you save, the more you earn.</p>
     </div>
   </div>
 
@@ -52,12 +51,12 @@
       <div class="card fcu-card h-100">
         <div class="card-header">Withdraw my interest</div>
         <div class="card-body">
-          {% if b.available > 0 %}
+          {% if mine.balance.available > 0 %}
             <form method="post" action="{% url 'unittrust:other_savings_action' 'withdraw' %}">
               {% csrf_token %}
               <label class="form-label" for="wAmount">Amount (UGX)</label>
-              <input type="number" class="form-control mb-2" id="wAmount" name="amount" min="1" max="{{ b.available|floatformat:0 }}"
-                     step="1" value="{{ b.available|floatformat:0 }}" required>
+              <input type="number" class="form-control mb-2" id="wAmount" name="amount" min="1" max="{{ mine.balance.available|floatformat:0 }}"
+                     step="1" value="{{ mine.balance.available|floatformat:0 }}" required>
               <button class="btn btn-fcu-primary" type="submit">Request withdrawal</button>
               <div class="form-text">The Treasurer pays you and records how (cash, bank or mobile money).</div>
             </form>
@@ -89,20 +88,38 @@
     </div>
   </div>
 
-  <div class="card fcu-card mb-5">
-    <div class="card-header">My interest, month by month</div>
-    <div class="table-responsive"><table class="table table-sm align-middle mb-0">
-      <thead><tr><th>Month</th><th class="text-end">My deposits then</th><th class="text-end">My share</th><th class="text-end">Interest credited</th></tr></thead>
-      <tbody>
-      {% for l in mine.lines %}
-        <tr><td>{{ l.credit.month|date:"F Y" }}</td><td class="text-end">{{ l.deposits|ugx }}</td><td class="text-end">{{ l.share_percent|floatformat:2 }}%</td><td class="text-end">{{ l.amount|ugx }}</td></tr>
-      {% empty %}
-        <tr><td colspan="4" class="text-center text-muted py-4">Nothing credited yet.</td></tr>
-      {% endfor %}
-      </tbody>
-    </table></div>
+  <div class="row g-4 mb-5">
+    <div class="col-lg-6">
+      <div class="card fcu-card h-100">
+        <div class="card-header">My savings</div>
+        <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+          <thead><tr><th>Date</th><th>Method</th><th class="text-end">Amount</th></tr></thead>
+          <tbody>
+          {% for d in mine.deposits %}
+            <tr><td>{{ d.deposit_date|date:"d M Y" }}</td><td>{{ d.get_payment_method_display }}</td><td class="text-end">{{ d.amount|ugx }}</td></tr>
+          {% empty %}
+            <tr><td colspan="3" class="text-center text-muted py-4">You have not saved anything here yet. Give the Treasurer the amount you want to save.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table></div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card fcu-card h-100">
+        <div class="card-header">My interest, month by month</div>
+        <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+          <thead><tr><th>Month</th><th class="text-end">My average savings</th><th class="text-end">My share</th><th class="text-end">Interest</th></tr></thead>
+          <tbody>
+          {% for l in mine.lines %}
+            <tr><td>{{ l.credit.month|date:"F Y" }}</td><td class="text-end">{{ l.deposits|ugx }}</td><td class="text-end">{{ l.share_percent|floatformat:2 }}%</td><td class="text-end">{{ l.amount|ugx }}</td></tr>
+          {% empty %}
+            <tr><td colspan="4" class="text-center text-muted py-4">Nothing credited yet.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table></div>
+      </div>
+    </div>
   </div>
-  {% endwith %}
 {% elif not is_management %}
   <div class="alert alert-light border">Other savings are shown to members.</div>
 {% endif %}
@@ -112,19 +129,53 @@
 
   {% if can_manage %}
   <div class="card fcu-card mb-4">
-    <div class="card-header">Credit a month's unit trust earnings to members</div>
+    <div class="card-header">Record Other savings from a member</div>
+    <div class="card-body">
+      <form method="post" action="{% url 'unittrust:other_savings_action' 'deposit' %}" class="row g-2 align-items-end">
+        {% csrf_token %}
+        <div class="col-md-3"><label class="form-label small" for="dMember">Member</label>
+          <select class="form-select" id="dMember" name="member" required>
+            <option value="">Choose&hellip;</option>
+            {% for m in members %}<option value="{{ m.pk }}">{{ m.member_code }} {{ m.full_name }}</option>{% endfor %}
+          </select></div>
+        <div class="col-md-2"><label class="form-label small" for="dQuick">Quick amount</label>
+          <select class="form-select" id="dQuick"><option value="">Choose&hellip;</option>
+            {% for q in quick_amounts %}<option value="{{ q }}">UGX {{ q|stringformat:"d" }}</option>{% endfor %}
+          </select></div>
+        <div class="col-md-2"><label class="form-label small" for="dAmount">Amount (UGX)</label>
+          <input type="number" class="form-control" id="dAmount" name="amount" min="1" step="1" required></div>
+        <div class="col-md-2"><label class="form-label small" for="dDate">Date</label>
+          <input type="date" class="form-control" id="dDate" name="deposit_date" value="{{ today|date:'Y-m-d' }}" max="{{ today|date:'Y-m-d' }}" required></div>
+        <div class="col-md-2"><label class="form-label small" for="dMethod">Method</label>
+          <select class="form-select" id="dMethod" name="payment_method">
+            <option value="CASH">Cash</option><option value="BANK">Bank transfer</option><option value="MOBILE_MONEY">Mobile money</option></select></div>
+        <div class="col-md-3"><label class="form-label small" for="dRef">Reference</label>
+          <input type="text" class="form-control" id="dRef" name="reference"></div>
+        <div class="col-md-2"><button class="btn btn-fcu-primary w-100" type="submit">Record</button></div>
+      </form>
+      <div class="form-text mt-2">Record the same money as invested in the unit trust, so the interest can be worked out. Interest counts from the date entered.</div>
+    </div>
+  </div>
+
+  <div class="card fcu-card mb-4">
+    <div class="card-header">Credit a month's interest to Other savings</div>
     <div class="table-responsive"><table class="table table-sm align-middle mb-0">
-      <thead><tr><th>Month</th><th class="text-end">Unit trust earnings less fees</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th>Month</th><th class="text-end">Unit trust earnings</th><th class="text-end">Money in the unit trust</th><th class="text-end">Other savings</th>
+        <th class="text-end">To Other savings</th><th class="text-end">Stays with the group</th><th>Status</th><th></th></tr></thead>
       <tbody>
-      {% for m in months %}
-        <tr><td>{{ m.first|date:"F Y" }}</td><td class="text-end">{{ m.income|ugx }}</td>
+      {% for m in months %}{% with p=m.preview %}
+        <tr><td>{{ m.first|date:"F Y" }}</td><td class="text-end">{{ p.income|ugx }}</td><td class="text-end">{{ p.capital|ugx }}</td>
+          <td class="text-end">{{ p.others_average|ugx }}</td>
+          <td class="text-end">{{ p.others_income|ugx }} <span class="small text-muted">({{ p.ratio_percent }}%)</span></td>
+          <td class="text-end">{{ p.group_income|ugx }}</td>
           <td>{% if m.credit %}<span class="badge text-bg-success">Credited {{ m.credit.credited_at|date:"d M Y" }}</span>
-              {% elif m.income > 0 %}<span class="badge text-bg-warning">Not credited</span>
-              {% else %}<span class="text-muted small">No earnings recorded</span>{% endif %}</td>
-          <td class="text-end">{% if m.income > 0 %}
+              {% elif p.income > 0 and p.others_average > 0 %}<span class="badge text-bg-warning">Not credited</span>
+              {% else %}<span class="text-muted small">Nothing to credit</span>{% endif %}
+              {% if not p.all_invested and p.others_average > 0 %}<div class="small text-danger">More Other savings than invested</div>{% endif %}</td>
+          <td class="text-end text-nowrap">{% if p.income > 0 and p.others_average > 0 and p.capital > 0 %}
             <form method="post" action="{% url 'unittrust:other_savings_action' 'credit' %}" class="d-inline">{% csrf_token %}
               <input type="hidden" name="month" value="{{ m.first|date:'Y-m-d' }}">
-              <button class="btn btn-sm {% if m.credit %}btn-outline-secondary{% else %}btn-fcu-primary{% endif %}" type="submit">{% if m.credit %}Recalculate{% else %}Credit to members{% endif %}</button>
+              <button class="btn btn-sm {% if m.credit %}btn-outline-secondary{% else %}btn-fcu-primary{% endif %}" type="submit">{% if m.credit %}Recalculate{% else %}Credit{% endif %}</button>
             </form>{% endif %}
             {% if m.credit and can_delete %}
               <form method="post" class="d-inline-flex gap-1" action="{% url 'unittrust:other_savings_action_pk' 'delete-credit' m.credit.pk %}"
@@ -133,21 +184,25 @@
                 <button class="btn btn-sm btn-danger" type="submit">Delete</button></form>
             {% endif %}
           </td></tr>
-      {% endfor %}
+      {% endwith %}{% endfor %}
       </tbody>
     </table></div>
     <div class="card-body small text-muted border-top">
-      Record the unit trust earnings (and fees) on the unit trust investment first. Each member's share is their deposits up to the end of that
-      month as a percentage of everyone's deposits, emergency excluded, so later deposits do not earn past interest.
+      The unit trust holds the group's money and Other savings together. Its earnings (less fees) are divided by how much of the unit trust's
+      money each supplied, averaged over the days of the month. Only the Other savings part is credited to members, shared by each member's own
+      average balance; the rest stays with the group as its usual unit trust income. Money in the unit trust is what is recorded as invested less
+      what was returned.
     </div>
   </div>
   {% endif %}
 
   {% with o=overview %}
   <div class="row g-3 mb-4">
-    <div class="col-md-6"><div class="card fcu-card"><div class="card-body"><small class="text-muted text-uppercase">Owed to members</small>
+    <div class="col-md-4"><div class="card fcu-card"><div class="card-body"><small class="text-muted text-uppercase">Other savings held</small>
+      <div class="fs-4 fw-semibold">{{ o.principal|ugx }}</div></div></div></div>
+    <div class="col-md-4"><div class="card fcu-card"><div class="card-body"><small class="text-muted text-uppercase">Interest owed to members</small>
       <div class="fs-4 fw-semibold">{{ o.owed|ugx }}</div></div></div></div>
-    <div class="col-md-6"><div class="card fcu-card"><div class="card-body"><small class="text-muted text-uppercase">Paid out so far</small>
+    <div class="col-md-4"><div class="card fcu-card"><div class="card-body"><small class="text-muted text-uppercase">Interest paid out so far</small>
       <div class="fs-4 fw-semibold">{{ o.paid|ugx }}</div></div></div></div>
   </div>
 
@@ -176,23 +231,42 @@
   </div>
 
   <div class="card fcu-card mb-4">
-    <div class="card-header">Each member's other savings</div>
+    <div class="card-header">Each member's Other savings</div>
     <div class="table-responsive"><table class="table table-sm align-middle mb-0">
-      <thead><tr><th>Member</th><th class="text-end">Earned</th><th class="text-end">Withdrawn</th><th class="text-end">Requested</th><th class="text-end">Available</th></tr></thead>
+      <thead><tr><th>Member</th><th class="text-end">Saved</th><th class="text-end">Interest earned</th><th class="text-end">Withdrawn</th><th class="text-end">Requested</th><th class="text-end">Available</th></tr></thead>
       <tbody>
       {% for r in o.rows %}
-        <tr><td>{{ r.member.member_code }} &middot; {{ r.member.full_name }}</td><td class="text-end">{{ r.earned|ugx }}</td>
+        <tr><td>{{ r.member.member_code }} &middot; {{ r.member.full_name }}</td><td class="text-end">{{ r.principal|ugx }}</td><td class="text-end">{{ r.earned|ugx }}</td>
           <td class="text-end">{{ r.withdrawn|ugx }}</td><td class="text-end">{{ r.pending|ugx }}</td><td class="text-end">{{ r.available|ugx }}</td></tr>
       {% empty %}
-        <tr><td colspan="5" class="text-center text-muted py-4">No interest has been credited yet.</td></tr>
+        <tr><td colspan="6" class="text-center text-muted py-4">No Other savings recorded yet.</td></tr>
       {% endfor %}
       </tbody>
     </table></div>
   </div>
 
+  {% if o.deposits %}
+  <div class="card fcu-card mb-4">
+    <div class="card-header">Recent Other savings deposits</div>
+    <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+      <tbody>
+      {% for d in o.deposits %}
+        <tr><td>{{ d.member.member_code }}</td><td class="text-nowrap">{{ d.deposit_date|date:"d M Y" }}</td><td class="text-end">{{ d.amount|ugx }}</td>
+          <td>{{ d.get_payment_method_display }}{% if d.reference %} &middot; {{ d.reference }}{% endif %}</td>
+          <td class="text-end">{% if can_delete %}
+            <form method="post" class="d-inline-flex gap-1" action="{% url 'unittrust:other_savings_action_pk' 'delete-deposit' d.pk %}"
+                  onsubmit="return confirm('Delete this deposit?');">{% csrf_token %}
+              <input type="text" name="reason" class="form-control form-control-sm" placeholder="Reason" required>
+              <button class="btn btn-sm btn-danger" type="submit">Delete</button></form>{% endif %}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+  {% endif %}
+
   {% if o.recent %}
   <div class="card fcu-card mb-4">
-    <div class="card-header">Recent decisions</div>
+    <div class="card-header">Recent withdrawal decisions</div>
     <div class="table-responsive"><table class="table table-sm align-middle mb-0">
       <tbody>
       {% for w in o.recent %}
@@ -210,4 +284,13 @@
   {% endif %}
   {% endwith %}
 {% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  var quick = document.getElementById("dQuick"), amount = document.getElementById("dAmount");
+  if (quick && amount) quick.addEventListener("change", function () { if (quick.value) amount.value = quick.value; });
+})();
+</script>
 {% endblock %}

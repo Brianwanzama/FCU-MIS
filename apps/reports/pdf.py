@@ -119,7 +119,7 @@ def render_cycle_pdf(report, organisation="Financial Cycle Unit (FCU)"):
             [52 * mm, 52 * mm, 52 * mm, 52 * mm, 52 * mm],
             right_from=0,
         ),
-        Paragraph(f"Other savings owed to members (unit trust interest): {ugx(report['position']['other_savings_owed'])}.", small),
+        Paragraph(f"Other savings owed to members (savings and interest): {ugx(report['position']['other_savings_owed'])}.", small),
         Paragraph(
             "*Worked out from every recorded movement of money, including expenses. Membership fees are not "
             "recorded in the system, so check this against the bank and cash balances.", small,

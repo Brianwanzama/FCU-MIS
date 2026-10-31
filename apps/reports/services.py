@@ -20,6 +20,7 @@ from apps.unittrust.models import (
     InterestWithdrawal,
     InvestmentTransaction,
     MemberInterest,
+    OtherSavingsDeposit,
     ProfitDistribution,
 )
 from apps.unittrust.services import portfolio
@@ -152,6 +153,7 @@ def financial_position():
 
     interest_paid = _sum(InterestWithdrawal.objects.filter(status=InterestWithdrawal.Status.PAID))
     interest_earned = _sum(MemberInterest.objects.all())
+    other_savings = _sum(OtherSavingsDeposit.objects.all())
 
     cash = (
         deposits + emergency + cash_repaid
@@ -161,6 +163,7 @@ def financial_position():
         - paid_out_profit
         - total_expenses()
         - interest_paid
+        + other_savings
     )
 
     owed = sum(
@@ -172,7 +175,7 @@ def financial_position():
         "emergency_fund": emergency,
         "loans_receivable": owed,
         "investments": portfolio(include_closed=False)["market_value"],
-        "other_savings_owed": interest_earned - interest_paid,
+        "other_savings_owed": other_savings + interest_earned - interest_paid,
         "derived_cash": cash,
     }
 

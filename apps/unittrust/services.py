@@ -2,6 +2,7 @@
 Investment and profit-distribution rules (Manual v3.0, sections 7 and 8).
 """
 
+from datetime import timedelta
 from decimal import ROUND_DOWN, Decimal
 
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -25,6 +26,7 @@ from .models import (
     InterestCredit,
     InterestWithdrawal,
     MemberInterest,
+    OtherSavingsDeposit,
 )
 
 T = InvestmentTransaction.Kind
@@ -679,9 +681,10 @@ def profit_figures(cycle):
     * unit trust: earnings received less fees,
     * other investments (microfinance, real estate): earnings received less fees,
 
-    and the expenses of the cycle. Unit trust earnings are credited to members every month as
-    their Other savings (see credit_unit_trust_interest), so they are shown here but NOT shared
-    again: the profit to share is loan interest plus other investments, less expenses.
+    and the expenses of the cycle. The unit trust figure is the GROUP's usual unit trust income:
+    the part of the earnings that belongs to members' Other savings (see credit_unit_trust_interest)
+    is taken out, because it is credited to those members instead. Net profit is the earnings less
+    the expenses.
     """
 
     from django.db.models import Sum
@@ -699,7 +702,26 @@ def profit_figures(cycle):
 
     from django.db.models import Q
 
-    unit_trust = net(Q(investment__kind=Investment.Kind.UNIT_TRUST))
+    unit_trust_total = net(Q(investment__kind=Investment.Kind.UNIT_TRUST))
+
+    first_month = cycle.start_date.replace(day=1)
+    credits = InterestCredit.objects.filter(month__gte=first_month, month__lte=cycle.end_date)
+    to_other_savings = credits.aggregate(t=Sum("others_income"))["t"] or ZERO
+    unit_trust = unit_trust_total - to_other_savings
+
+    # Months with unit trust earnings while Other savings existed, but not credited yet: until they
+    # are, the whole month's earnings still look like the group's.
+    credited = set(credits.values_list("month", flat=True))
+    uncredited = []
+    month = first_month
+    while month <= cycle.end_date:
+        if (
+            month not in credited
+            and unit_trust_income_for_month(month) > 0
+            and OtherSavingsDeposit.objects.filter(deposit_date__lte=_month_end(month)).exists()
+        ):
+            uncredited.append(month)
+        month = (_month_end(month) + timedelta(days=1))
     other_rows = []
     for kind, label in Investment.Kind.choices:
         if kind == Investment.Kind.UNIT_TRUST:
@@ -713,11 +735,14 @@ def profit_figures(cycle):
     return {
         "loan_interest": loan_interest,
         "unit_trust_income": unit_trust,
+        "unit_trust_total": unit_trust_total,
+        "unit_trust_to_other_savings": to_other_savings,
+        "uncredited_months": uncredited,
         "other_investment_income": other,
         "other_breakdown": other_rows,
-        "gross_income": loan_interest + other,
+        "gross_income": loan_interest + unit_trust + other,
         "expenses": expenses,
-        "net_profit": loan_interest + other - expenses,
+        "net_profit": loan_interest + unit_trust + other - expenses,
     }
 
 
@@ -908,35 +933,176 @@ def interest_balance(member):
     return {"earned": earned, "withdrawn": paid, "pending": pending, "available": earned - paid - pending}
 
 
+def _average_balance(events, first):
+    """
+    Time-weighted average of a balance over the month starting `first`.
+
+    `events` is a list of (date, amount change). Money counts from the day it arrives, so a
+    deposit on the 16th earns for about half of the month, and one on the last day for a day.
+    """
+
+    last = _month_end(first)
+    days = (last - first).days + 1
+    balance = sum((delta for when, delta in events if when < first), ZERO)
+    in_month = sorted((when, delta) for when, delta in events if first <= when <= last)
+
+    total = ZERO
+    index = 0
+
+    for offset in range(days):
+        day = first + timedelta(days=offset)
+        while index < len(in_month) and in_month[index][0] <= day:
+            balance += in_month[index][1]
+            index += 1
+        total += balance
+
+    return total / days
+
+
+def interest_preview(month):
+    """
+    How the month's unit trust earnings divide, without saving anything.
+
+    The unit trust holds the group's money and members' Other savings together. Its earnings (less
+    fees) are divided by how much of the unit trust's money each supplied, averaged over the days
+    of the month:
+
+        Other savings part = earnings x (average Other savings balance / average money in the unit trust)
+
+    The rest stays with the group as its usual unit trust income. Each member's part of the Other
+    savings portion follows their own average Other savings balance. Deposits and money invested
+    count from the day they are dated.
+    """
+
+    first = _month_start(month)
+    last = _month_end(first)
+    income = unit_trust_income_for_month(first)
+
+    capital_events = [
+        (t.transaction_date, t.amount if t.kind == T.INVEST else -t.amount)
+        for t in InvestmentTransaction.objects.filter(
+            investment__kind=Investment.Kind.UNIT_TRUST,
+            reversed_at__isnull=True,
+            kind__in=[T.INVEST, T.REDEEM],
+            transaction_date__lte=last,
+        )
+    ]
+    capital = _average_balance(capital_events, first)
+
+    by_member = {}
+    for d in OtherSavingsDeposit.objects.filter(deposit_date__lte=last).select_related("member"):
+        by_member.setdefault(d.member_id, []).append((d.deposit_date, d.amount))
+
+    averages = {pk: _average_balance(events, first) for pk, events in by_member.items()}
+    others_average = sum(averages.values(), ZERO)
+
+    ratio = ZERO
+    if capital > 0:
+        ratio = min(others_average / capital, Decimal("1"))
+
+    others_income = (max(income, ZERO) * ratio).quantize(Decimal("1"), rounding=ROUND_DOWN)
+
+    return {
+        "month": first,
+        "income": income,
+        "capital": capital.quantize(Decimal("0.01")),
+        "others_average": others_average.quantize(Decimal("0.01")),
+        "ratio": ratio,
+        "ratio_percent": (ratio * 100).quantize(Decimal("0.01")),
+        "others_income": others_income,
+        "group_income": income - others_income,
+        "averages": averages,
+        "all_invested": capital >= others_average,
+    }
+
+
+@transaction.atomic
+def record_other_deposit(actor, member, amount, deposit_date, method="CASH", reference=""):
+    """Record extra money a member saves with FCU (Treasurer or Administrator)."""
+
+    _require(actor, "has_financial_write_access", "record Other savings")
+
+    amount = Decimal(amount)
+
+    if amount <= 0:
+        raise InvestmentError("The amount must be greater than zero.")
+
+    if deposit_date > timezone.localdate():
+        raise InvestmentError("A deposit cannot be dated in the future.")
+
+    if method not in OtherSavingsDeposit.Method.values:
+        raise InvestmentError("Choose how the money was paid.")
+
+    deposit = OtherSavingsDeposit.objects.create(
+        member=member, amount=amount, deposit_date=deposit_date, payment_method=method,
+        reference=(reference or "").strip(), recorded_by=actor,
+    )
+
+    log_action(
+        AuditLog.Action.CREATE, instance=deposit, actor=actor,
+        new_value={"event": "OTHER_SAVINGS_DEPOSIT", "member": member.member_code, "amount": str(amount),
+                   "deposit_date": deposit_date.isoformat(), "method": method, "reference": deposit.reference},
+    )
+    return deposit
+
+
+@transaction.atomic
+def delete_other_deposit(deposit, actor, reason):
+    _require(actor, "can_delete_records", "delete Other savings deposits")
+    reason = _delete_reason(reason)
+
+    deposit = OtherSavingsDeposit.objects.select_related("member").get(pk=deposit.pk)
+
+    if InterestCredit.objects.filter(month__gte=_month_start(deposit.deposit_date)).exists():
+        raise InvestmentError(
+            "Interest has already been credited for the month of this deposit or later. Delete those "
+            "credited months first, or record a correction instead."
+        )
+
+    log_action(
+        AuditLog.Action.DELETE, instance=deposit, actor=actor,
+        old_value={"member": deposit.member.member_code, "amount": str(deposit.amount),
+                   "deposit_date": deposit.deposit_date.isoformat()},
+        new_value={"event": "OTHER_SAVINGS_DEPOSIT_DELETED", "reason": reason},
+    )
+    deposit.delete()
+
+
 @transaction.atomic
 def credit_unit_trust_interest(month, actor):
     """
-    Share a month's unit trust earnings among members by relative contribution (deposits up to
-    the end of that month as a percentage of everyone's, emergency excluded). Treasurer or
-    Administrator. Doing it again for the same month recalculates it, as long as no member would
-    end up with less than they have already withdrawn or asked for.
+    Credit a month's interest to members' Other savings (Treasurer or Administrator).
+
+    Only the Other savings part of the unit trust's earnings is credited (see interest_preview);
+    the group keeps the rest. Doing it again for the same month recalculates it, as long as no member
+    would end up with less than they have already withdrawn or asked for.
     """
 
-    _require(actor, "has_financial_write_access", "credit unit trust interest")
+    _require(actor, "has_financial_write_access", "credit Other savings interest")
 
     first = _month_start(month)
 
     if first > _month_start(timezone.localdate()):
         raise InvestmentError("Interest cannot be credited for a month that has not started.")
 
-    income = unit_trust_income_for_month(first)
+    preview = interest_preview(first)
 
-    if income <= 0:
+    if preview["income"] <= 0:
         raise InvestmentError(
             f"No unit trust earnings (after fees) are recorded for {first:%B %Y}. Record them on the "
             "unit trust investment first."
         )
 
-    shares = contribution_shares(as_of=_month_end(first))
-    amounts = split_proportionally(income, {row["member"].pk: row["total"] for row in shares["rows"]})
+    if preview["others_average"] <= 0:
+        raise InvestmentError(f"No Other savings were held in {first:%B %Y}, so there is nothing to credit.")
 
-    if not amounts or not any(amounts.values()):
-        raise InvestmentError("No member had deposits by the end of that month, so there is nothing to share.")
+    if preview["capital"] <= 0:
+        raise InvestmentError(
+            f"No money is recorded as invested in the unit trust in {first:%B %Y}. Record the money "
+            "placed in the unit trust (including Other savings) as invested first."
+        )
+
+    amounts = split_proportionally(preview["others_income"], preview["averages"])
 
     credit = InterestCredit.objects.select_for_update().filter(month=first).first()
     created = credit is None
@@ -947,8 +1113,7 @@ def credit_unit_trust_interest(month, actor):
     # Never leave a member with less than they have already taken or requested.
     if not created:
         old = {l.member_id: l.amount for l in credit.lines.all()}
-        for row in shares["rows"]:
-            member = row["member"]
+        for member in Member.objects.filter(pk__in=set(old) | set(amounts)):
             balance = interest_balance(member)
             new_total = balance["earned"] - old.get(member.pk, ZERO) + amounts.get(member.pk, ZERO)
             if new_total < balance["withdrawn"] + balance["pending"]:
@@ -957,30 +1122,41 @@ def credit_unit_trust_interest(month, actor):
                     "interest, so the month cannot be recalculated."
                 )
 
-    credit.income = income
-    credit.pool_deposits = shares["total"]
+    credit.income = preview["income"]
+    credit.pool_deposits = preview["others_average"]
+    credit.capital = preview["capital"]
+    credit.others_income = preview["others_income"]
+    credit.group_income = preview["group_income"]
     credit.credited_at = timezone.now()
     credit.credited_by = actor
     credit.save()
 
     credit.lines.all().delete()
+    pool = sum(preview["averages"].values(), ZERO)
     MemberInterest.objects.bulk_create(
         MemberInterest(
             credit=credit,
-            member=row["member"],
-            deposits=row["total"],
-            share_percent=(row["ratio"] * 100).quantize(Decimal("0.0001")),
-            amount=amounts.get(row["member"].pk, ZERO),
+            member_id=pk,
+            deposits=average.quantize(Decimal("0.01")),
+            share_percent=(average / pool * 100).quantize(Decimal("0.0001")) if pool else ZERO,
+            amount=amounts.get(pk, ZERO),
         )
-        for row in shares["rows"]
+        for pk, average in preview["averages"].items()
     )
 
     log_action(
         AuditLog.Action.CREATE if created else AuditLog.Action.UPDATE,
         instance=credit,
         actor=actor,
-        new_value={"event": "UNIT_TRUST_INTEREST_CREDITED", "month": first.isoformat(),
-                   "income": str(income), "pool_deposits": str(shares["total"])},
+        new_value={
+            "event": "UNIT_TRUST_INTEREST_CREDITED",
+            "month": first.isoformat(),
+            "unit_trust_income": str(preview["income"]),
+            "capital": str(preview["capital"]),
+            "other_savings_average": str(preview["others_average"]),
+            "credited_to_other_savings": str(preview["others_income"]),
+            "kept_by_the_group": str(preview["group_income"]),
+        },
     )
 
     return credit
@@ -1123,30 +1299,37 @@ def delete_withdrawal(withdrawal, actor, reason):
     withdrawal.delete()
 
 
+def principal_balance(member):
+    """What the member has saved in Other savings (their own extra money, not interest)."""
+
+    from django.db.models import Sum
+
+    return OtherSavingsDeposit.objects.filter(member=member).aggregate(t=Sum("amount"))["t"] or ZERO
+
+
 def other_savings(member):
     """
-    Everything a member sees on their Other savings page: the balance, month-by-month history,
-    withdrawals, and what they can expect each month from unit trust at their current share.
-    The expectation is only an estimate from the latest month credited, not a promise.
+    Everything a member sees on their Other savings page: what they have saved, the interest
+    earned and available, month-by-month history and withdrawals, and what they can expect each
+    month at their current balance. The expectation uses the latest month credited and is an
+    estimate, not a promise.
     """
 
     balance = interest_balance(member)
+    principal = principal_balance(member)
     lines = list(
         MemberInterest.objects.filter(member=member).select_related("credit").order_by("-credit__month")
     )
-    credits = list(InterestCredit.objects.order_by("-month"))
-    mine = contribution_shares()
-    row = next((r for r in mine["rows"] if r["member"].pk == member.pk), None)
-    my_deposits = row["total"] if row else ZERO
+    latest = InterestCredit.objects.order_by("-month").first()
 
-    latest = credits[0] if credits else None
+    monthly_rate = ZERO     # interest earned in the latest month per shilling of Other savings
     per_100k = ZERO
     estimate = ZERO
 
     if latest and latest.pool_deposits > 0:
-        rate = latest.income / latest.pool_deposits       # earned per shilling of deposits that month
-        per_100k = (rate * Decimal("100000")).quantize(Decimal("1"))
-        estimate = (rate * my_deposits).quantize(Decimal("1"))
+        monthly_rate = latest.others_income / latest.pool_deposits
+        per_100k = (monthly_rate * Decimal("100000")).quantize(Decimal("1"))
+        estimate = (monthly_rate * principal).quantize(Decimal("1"))
 
     average = ZERO
     if lines:
@@ -1154,11 +1337,12 @@ def other_savings(member):
 
     return {
         "balance": balance,
+        "principal": principal,
+        "deposits": list(OtherSavingsDeposit.objects.filter(member=member)),
         "lines": lines,
         "withdrawals": list(InterestWithdrawal.objects.filter(member=member)),
-        "my_deposits": my_deposits,
-        "share_percent": row["percent"] if row else ZERO,
         "latest": latest,
+        "monthly_rate_percent": (monthly_rate * 100).quantize(Decimal("0.01")),
         "estimate_monthly": estimate,
         "per_100k": per_100k,
         "average_monthly": average,
@@ -1167,19 +1351,26 @@ def other_savings(member):
 
 
 def other_savings_overview():
-    """For management: what is owed to each member, the months credited and the open requests."""
+    """For management: savings held and interest owed per member, months credited, open requests."""
 
     from django.db.models import Sum
 
-    members = Member.objects.filter(interest_credits__isnull=False).distinct().order_by("member_code")
-    rows = [{"member": m, **interest_balance(m)} for m in members]
+    member_ids = set(OtherSavingsDeposit.objects.values_list("member_id", flat=True)) | set(
+        MemberInterest.objects.values_list("member_id", flat=True)
+    )
+    rows = [
+        {"member": m, "principal": principal_balance(m), **interest_balance(m)}
+        for m in Member.objects.filter(pk__in=member_ids).order_by("member_code")
+    ]
 
     return {
         "rows": rows,
+        "principal": sum((r["principal"] for r in rows), ZERO),
         "owed": sum((r["available"] + r["pending"] for r in rows), ZERO),
         "paid": InterestWithdrawal.objects.filter(status=InterestWithdrawal.Status.PAID)
         .aggregate(t=Sum("amount"))["t"] or ZERO,
         "credits": list(InterestCredit.objects.select_related("credited_by")),
+        "deposits": list(OtherSavingsDeposit.objects.select_related("member", "recorded_by")[:30]),
         "requests": list(
             InterestWithdrawal.objects.filter(status=InterestWithdrawal.Status.REQUESTED).select_related("member")
         ),

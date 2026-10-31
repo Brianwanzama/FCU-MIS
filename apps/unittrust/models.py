@@ -190,8 +190,7 @@ class ProfitStatement(models.Model):
 
     @property
     def gross_income(self):
-        """Income that is shared as profit: unit trust is paid out monthly as Other savings."""
-        return self.loan_interest + self.other_investment_income
+        return self.loan_interest + self.unit_trust_income + self.other_investment_income
 
 
 class ProfitShare(models.Model):
@@ -212,16 +211,56 @@ class ProfitShare(models.Model):
 
 
 
+class OtherSavingsDeposit(models.Model):
+    """
+    Extra money a member saves with FCU, separate from their regular deposits, which FCU places in
+    the unit trust. Only this money earns Other savings interest; the group's own deposits and the
+    group's unit trust earnings are not touched by it.
+    """
+
+    class Method(models.TextChoices):
+        CASH = "CASH", "Cash"
+        BANK = "BANK", "Bank Transfer"
+        MOBILE_MONEY = "MOBILE_MONEY", "Mobile Money"
+
+    member = models.ForeignKey("members.Member", on_delete=models.PROTECT, related_name="other_savings_deposits")
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    deposit_date = models.DateField()
+    payment_method = models.CharField(max_length=20, choices=Method.choices, default=Method.CASH)
+    reference = models.CharField(max_length=100, blank=True)
+    recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-deposit_date", "-id"]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(amount__gt=0), name="other_savings_deposit_positive"),
+        ]
+
+    def __str__(self):
+        return f"{self.member.member_code} {self.amount} on {self.deposit_date}"
+
+
 class InterestCredit(models.Model):
     """
-    One month's unit trust earnings (earnings received less fees) shared among members by
-    relative contribution: each member's deposits up to the end of that month as a percentage of
-    everyone's. This is the members' "Other savings": it builds up each month and can be withdrawn.
+    One month's interest on members' Other savings. The unit trust's earnings for the month (less
+    fees) are split between the group's own money and the Other savings money in proportion to how
+    much of the unit trust's capital each supplied (daily average over the month). Only the Other
+    savings part is credited to members, shared by each member's average Other savings balance;
+    the rest stays with the group as the usual unit trust income.
     """
 
     month = models.DateField(unique=True, help_text="The first day of the month the earnings belong to.")
-    income = models.DecimalField(max_digits=14, decimal_places=2, help_text="Unit trust earnings less fees for the month.")
-    pool_deposits = models.DecimalField(max_digits=14, decimal_places=2)
+    income = models.DecimalField(max_digits=14, decimal_places=2, help_text="All unit trust earnings less fees for the month.")
+    pool_deposits = models.DecimalField(
+        max_digits=14, decimal_places=2, help_text="Everyone's average Other savings balance over the month.")
+    capital = models.DecimalField(
+        max_digits=14, decimal_places=2, default=Decimal("0"),
+        help_text="Average money invested in the unit trust over the month (group and Other savings).")
+    others_income = models.DecimalField(
+        max_digits=14, decimal_places=2, default=Decimal("0"), help_text="The part credited to Other savings.")
+    group_income = models.DecimalField(
+        max_digits=14, decimal_places=2, default=Decimal("0"), help_text="The part that stays with the group.")
     credited_at = models.DateTimeField()
     credited_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
 
@@ -235,7 +274,8 @@ class InterestCredit(models.Model):
 class MemberInterest(models.Model):
     credit = models.ForeignKey(InterestCredit, on_delete=models.CASCADE, related_name="lines")
     member = models.ForeignKey("members.Member", on_delete=models.PROTECT, related_name="interest_credits")
-    deposits = models.DecimalField(max_digits=14, decimal_places=2)
+    deposits = models.DecimalField(
+        max_digits=14, decimal_places=2, help_text="The member's average Other savings balance over the month.")
     share_percent = models.DecimalField(max_digits=9, decimal_places=4, default=Decimal("0"))
     amount = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
 
