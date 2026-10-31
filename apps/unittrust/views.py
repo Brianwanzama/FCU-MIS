@@ -1,4 +1,5 @@
-from decimal import Decimal
+from datetime import timedelta
+from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -13,24 +14,34 @@ from .services import (
     InvestmentError,
     approve_distribution,
     cancel_distribution,
+    cancel_withdrawal,
     capture_profit,
+    credit_unit_trust_interest,
     close_investment,
     contribution_shares,
     create_investment,
     delete_profit_statement,
     delete_distribution,
+    delete_interest_credit,
     delete_investment,
     delete_transaction,
+    delete_withdrawal,
     draft_distribution,
     mark_distribution_paid,
     member_investment_summary,
     member_profit,
+    other_savings,
+    other_savings_overview,
+    pay_withdrawal,
     portfolio,
     position,
     profit_figures,
     publish_profit,
+    reject_withdrawal,
+    request_withdrawal,
     record_transaction,
     reverse_transaction,
+    unit_trust_income_for_month,
     unpublish_profit,
 )
 
@@ -402,3 +413,90 @@ class ProfitActionView(LoginRequiredMixin, View):
             messages.error(request, _messages(exc))
 
         return back
+
+
+
+def _recent_months(count=12):
+    from apps.unittrust.models import InterestCredit
+
+    first = timezone.localdate().replace(day=1)
+    credited = {c.month: c for c in InterestCredit.objects.all()}
+    months = []
+    for _ in range(count):
+        months.append({
+            "first": first,
+            "income": unit_trust_income_for_month(first),
+            "credit": credited.get(first),
+        })
+        first = (first - timedelta(days=1)).replace(day=1)
+    return months
+
+
+class OtherSavingsView(LoginRequiredMixin, View):
+    """
+    "Other savings": the unit trust interest credited to a member every month, what they can expect
+    each month at their current share, and withdrawing it. Management also credits each month's
+    earnings and pays withdrawals from the same page.
+    """
+
+    def get(self, request):
+        user = request.user
+        context = {
+            "mine": other_savings(user.member) if user.member_id else None,
+            "is_management": user.has_financial_view_access,
+            "can_manage": user.has_financial_write_access,
+            "can_delete": user.can_delete_records,
+        }
+
+        if user.has_financial_view_access:
+            context["overview"] = other_savings_overview()
+            context["months"] = _recent_months()
+
+        return render(request, "unittrust/other_savings.html", context)
+
+
+class OtherSavingsActionView(LoginRequiredMixin, View):
+    http_method_names = ["post"]
+
+    def post(self, request, action, pk=None):
+        from datetime import date
+
+        from apps.unittrust.models import InterestCredit, InterestWithdrawal
+
+        user = request.user
+        reason = request.POST.get("reason", "")
+
+        try:
+            if action == "credit":
+                month = date.fromisoformat(request.POST.get("month", ""))
+                credit_unit_trust_interest(month, user)
+                messages.success(request, f"Unit trust interest for {month:%B %Y} credited to members.")
+            elif action == "withdraw":
+                if not user.member_id:
+                    raise PermissionDenied
+                request_withdrawal(user.member, request.POST.get("amount", "0") or "0", user)
+                messages.success(request, "Withdrawal requested. The Treasurer will pay it and record how.")
+            elif action == "cancel":
+                cancel_withdrawal(get_object_or_404(InterestWithdrawal, pk=pk), user)
+                messages.success(request, "Request cancelled.")
+            elif action == "pay":
+                pay_withdrawal(get_object_or_404(InterestWithdrawal, pk=pk), user,
+                               request.POST.get("payment_method", ""), request.POST.get("reference", ""))
+                messages.success(request, "Marked as paid.")
+            elif action == "reject":
+                reject_withdrawal(get_object_or_404(InterestWithdrawal, pk=pk), user, request.POST.get("note", ""))
+                messages.success(request, "Request rejected.")
+            elif action == "delete-credit":
+                delete_interest_credit(get_object_or_404(InterestCredit, pk=pk), user, reason)
+                messages.success(request, "Credited interest deleted. A copy is kept in the audit log.")
+            elif action == "delete-withdrawal":
+                delete_withdrawal(get_object_or_404(InterestWithdrawal, pk=pk), user, reason)
+                messages.success(request, "Withdrawal record deleted. A copy is kept in the audit log.")
+            else:
+                raise PermissionDenied
+        except (InvestmentError, ValueError) as exc:
+            messages.error(request, _messages(exc) if isinstance(exc, InvestmentError) else "Check what you entered.")
+        except InvalidOperation:
+            messages.error(request, "Enter a whole number of shillings.")
+
+        return redirect("unittrust:other_savings")

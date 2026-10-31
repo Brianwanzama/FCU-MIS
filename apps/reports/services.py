@@ -16,7 +16,12 @@ from apps.contributions.services import cycle_contribution_summary, member_contr
 from apps.loans.models import Loan, LoanInstallment, LoanRepayment
 from apps.expenses.services import expense_summary, total_expenses
 from apps.members.models import Member
-from apps.unittrust.models import InvestmentTransaction, ProfitDistribution
+from apps.unittrust.models import (
+    InterestWithdrawal,
+    InvestmentTransaction,
+    MemberInterest,
+    ProfitDistribution,
+)
 from apps.unittrust.services import portfolio
 
 ZERO = Decimal("0")
@@ -145,6 +150,9 @@ def financial_position():
         ProfitDistribution.objects.filter(status=ProfitDistribution.Status.PAID), "total_amount"
     )
 
+    interest_paid = _sum(InterestWithdrawal.objects.filter(status=InterestWithdrawal.Status.PAID))
+    interest_earned = _sum(MemberInterest.objects.all())
+
     cash = (
         deposits + emergency + cash_repaid
         + _sum(live_inv.filter(kind=K.REDEEM)) + _sum(live_inv.filter(kind=K.INCOME))
@@ -152,6 +160,7 @@ def financial_position():
         - _sum(live_inv.filter(kind=K.INVEST)) - _sum(live_inv.filter(kind=K.FEE))
         - paid_out_profit
         - total_expenses()
+        - interest_paid
     )
 
     owed = sum(
@@ -163,6 +172,7 @@ def financial_position():
         "emergency_fund": emergency,
         "loans_receivable": owed,
         "investments": portfolio(include_closed=False)["market_value"],
+        "other_savings_owed": interest_earned - interest_paid,
         "derived_cash": cash,
     }
 

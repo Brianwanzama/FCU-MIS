@@ -273,6 +273,29 @@ Run `python manage.py migrate`: adds `loans.0001` and `contributions.0004`.
 - This is a statement of profit, not a payout. Paying a bonus is still a profit distribution approved
   with a General Meeting resolution. Run `python manage.py migrate`: adds `unittrust.0002`.
 
+## Other savings (unit trust interest for members)
+
+- **Other Savings** (menu, `/investments/other-savings/`) is the members' view of the unit trust.
+  Each month the Treasurer or Administrator records the unit trust earnings and fees on the unit
+  trust investment, then presses **Credit to members** for that month. The earnings less fees are
+  shared by relative contribution: each member's deposits up to the end of that month as a percentage
+  of everyone's (emergency excluded), so later deposits do not earn past interest. Recalculating a
+  month is allowed unless a member has already withdrawn or asked for more than the new figure.
+- A member sees what is **available to withdraw**, the total earned, what they have withdrawn, what
+  they can **expect each month** at their current share (from the latest month credited; an estimate,
+  not a promise), and what each extra UGX 100,000 saved would add. That figure is there to encourage
+  saving with FCU. The month-by-month history and their withdrawals are listed below.
+- **Withdrawing:** a member requests an amount up to what is available (whole shillings); the
+  Treasurer or Administrator pays it and records cash, bank or mobile money and a reference, or
+  rejects it with a reason. The member can cancel a request that has not been paid. Management
+  (Administrator, Treasurer, Chairperson) sees what is owed to each member, the open requests and
+  the months credited. Deleting a credit or a withdrawal record needs a reason and keeps an audit copy.
+- Unit trust earnings now reach members here, so the **profit statement no longer shares them
+  again**: profit to share is loan interest plus other investments, less expenses. The unit trust
+  line is still shown on the profit page for information.
+- The financial position in the cycle report shows **other savings owed to members**, and the derived
+  cash falls when interest is paid out. Run `python manage.py migrate`: adds `unittrust.0003`.
+
 ## Accounts, roles and passwords
 
 - **More than one role:** on *Users & Roles* the Administrator picks a main role and ticks

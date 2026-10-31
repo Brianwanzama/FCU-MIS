@@ -22,6 +22,9 @@ from .models import (
     ProfitDistribution,
     ProfitShare,
     ProfitStatement,
+    InterestCredit,
+    InterestWithdrawal,
+    MemberInterest,
 )
 
 T = InvestmentTransaction.Kind
@@ -580,24 +583,29 @@ def cancel_distribution(distribution, actor, reason):
 # A member's own picture
 # ============================================================
 
-def contribution_shares():
+def contribution_shares(as_of=None):
     """
     Each member's share of the pool: their total deposits across ALL cycles (reversed
     payments left out, emergency contributions never counted) as a percentage of the
     total deposits of all members in all cycles.
 
     Returns {"total": Decimal, "rows": [{"member", "total", "percent"}]}, one row per member
-    who has paid deposits, in member order.
+    who has paid deposits, in member order. With `as_of`, only deposits paid on or before
+    that date count (used for monthly interest, so later deposits do not earn past interest).
     """
 
     from django.db.models import Sum
 
     from apps.contributions.models import Contribution
 
+    deposits = Contribution.objects.filter(
+        contribution_type=Contribution.ContributionType.MONTHLY, reversed_at__isnull=True
+    )
+    if as_of is not None:
+        deposits = deposits.filter(payment_date__lte=as_of)
+
     totals = dict(
-        Contribution.objects.filter(
-            contribution_type=Contribution.ContributionType.MONTHLY, reversed_at__isnull=True
-        )
+        deposits
         .values_list("member_id")
         .annotate(total=Sum("amount"))
         .values_list("member_id", "total")
@@ -671,7 +679,9 @@ def profit_figures(cycle):
     * unit trust: earnings received less fees,
     * other investments (microfinance, real estate): earnings received less fees,
 
-    and the expenses of the cycle. Net profit is the earnings less the expenses.
+    and the expenses of the cycle. Unit trust earnings are credited to members every month as
+    their Other savings (see credit_unit_trust_interest), so they are shown here but NOT shared
+    again: the profit to share is loan interest plus other investments, less expenses.
     """
 
     from django.db.models import Sum
@@ -705,9 +715,9 @@ def profit_figures(cycle):
         "unit_trust_income": unit_trust,
         "other_investment_income": other,
         "other_breakdown": other_rows,
-        "gross_income": loan_interest + unit_trust + other,
+        "gross_income": loan_interest + other,
         "expenses": expenses,
-        "net_profit": loan_interest + unit_trust + other - expenses,
+        "net_profit": loan_interest + other - expenses,
     }
 
 
@@ -839,3 +849,342 @@ def member_profit(member):
         .order_by("-statement__cycle__start_date")
     )
     return {"shares": shares, "total": sum((s.amount for s in shares), ZERO)}
+
+
+
+# ============================================================
+# Other savings: unit trust interest credited to members every month
+# ============================================================
+
+def _month_start(value):
+    return value.replace(day=1)
+
+
+def _month_end(first):
+    from calendar import monthrange
+
+    return first.replace(day=monthrange(first.year, first.month)[1])
+
+
+def unit_trust_income_for_month(first):
+    """Unit trust earnings received in the month, less fees (reversed entries left out)."""
+
+    from django.db.models import Sum
+
+    rows = InvestmentTransaction.objects.filter(
+        investment__kind=Investment.Kind.UNIT_TRUST,
+        reversed_at__isnull=True,
+        transaction_date__gte=first,
+        transaction_date__lte=_month_end(first),
+    )
+    income = rows.filter(kind=T.INCOME).aggregate(t=Sum("amount"))["t"] or ZERO
+    fees = rows.filter(kind=T.FEE).aggregate(t=Sum("amount"))["t"] or ZERO
+    return income - fees
+
+
+def _committed(member):
+    """Interest already taken out or asked for."""
+
+    from django.db.models import Sum
+
+    return InterestWithdrawal.objects.filter(
+        member=member, status__in=[InterestWithdrawal.Status.REQUESTED, InterestWithdrawal.Status.PAID]
+    ).aggregate(t=Sum("amount"))["t"] or ZERO
+
+
+def interest_balance(member):
+    """What the member has earned, what they have taken or asked for, and what is available now."""
+
+    from django.db.models import Sum
+
+    earned = MemberInterest.objects.filter(member=member).aggregate(t=Sum("amount"))["t"] or ZERO
+    paid = InterestWithdrawal.objects.filter(
+        member=member, status=InterestWithdrawal.Status.PAID
+    ).aggregate(t=Sum("amount"))["t"] or ZERO
+    pending = InterestWithdrawal.objects.filter(
+        member=member, status=InterestWithdrawal.Status.REQUESTED
+    ).aggregate(t=Sum("amount"))["t"] or ZERO
+
+    return {"earned": earned, "withdrawn": paid, "pending": pending, "available": earned - paid - pending}
+
+
+@transaction.atomic
+def credit_unit_trust_interest(month, actor):
+    """
+    Share a month's unit trust earnings among members by relative contribution (deposits up to
+    the end of that month as a percentage of everyone's, emergency excluded). Treasurer or
+    Administrator. Doing it again for the same month recalculates it, as long as no member would
+    end up with less than they have already withdrawn or asked for.
+    """
+
+    _require(actor, "has_financial_write_access", "credit unit trust interest")
+
+    first = _month_start(month)
+
+    if first > _month_start(timezone.localdate()):
+        raise InvestmentError("Interest cannot be credited for a month that has not started.")
+
+    income = unit_trust_income_for_month(first)
+
+    if income <= 0:
+        raise InvestmentError(
+            f"No unit trust earnings (after fees) are recorded for {first:%B %Y}. Record them on the "
+            "unit trust investment first."
+        )
+
+    shares = contribution_shares(as_of=_month_end(first))
+    amounts = split_proportionally(income, {row["member"].pk: row["total"] for row in shares["rows"]})
+
+    if not amounts or not any(amounts.values()):
+        raise InvestmentError("No member had deposits by the end of that month, so there is nothing to share.")
+
+    credit = InterestCredit.objects.select_for_update().filter(month=first).first()
+    created = credit is None
+
+    if created:
+        credit = InterestCredit(month=first)
+
+    # Never leave a member with less than they have already taken or requested.
+    if not created:
+        old = {l.member_id: l.amount for l in credit.lines.all()}
+        for row in shares["rows"]:
+            member = row["member"]
+            balance = interest_balance(member)
+            new_total = balance["earned"] - old.get(member.pk, ZERO) + amounts.get(member.pk, ZERO)
+            if new_total < balance["withdrawn"] + balance["pending"]:
+                raise InvestmentError(
+                    f"{member.member_code} has already withdrawn or asked for more than the recalculated "
+                    "interest, so the month cannot be recalculated."
+                )
+
+    credit.income = income
+    credit.pool_deposits = shares["total"]
+    credit.credited_at = timezone.now()
+    credit.credited_by = actor
+    credit.save()
+
+    credit.lines.all().delete()
+    MemberInterest.objects.bulk_create(
+        MemberInterest(
+            credit=credit,
+            member=row["member"],
+            deposits=row["total"],
+            share_percent=(row["ratio"] * 100).quantize(Decimal("0.0001")),
+            amount=amounts.get(row["member"].pk, ZERO),
+        )
+        for row in shares["rows"]
+    )
+
+    log_action(
+        AuditLog.Action.CREATE if created else AuditLog.Action.UPDATE,
+        instance=credit,
+        actor=actor,
+        new_value={"event": "UNIT_TRUST_INTEREST_CREDITED", "month": first.isoformat(),
+                   "income": str(income), "pool_deposits": str(shares["total"])},
+    )
+
+    return credit
+
+
+@transaction.atomic
+def delete_interest_credit(credit, actor, reason):
+    _require(actor, "can_delete_records", "delete credited interest")
+    reason = _delete_reason(reason)
+
+    credit = InterestCredit.objects.get(pk=credit.pk)
+
+    for line in credit.lines.select_related("member"):
+        balance = interest_balance(line.member)
+        if balance["earned"] - line.amount < balance["withdrawn"] + balance["pending"]:
+            raise InvestmentError(
+                f"{line.member.member_code} has already withdrawn or asked for part of this interest, "
+                "so it cannot be deleted."
+            )
+
+    log_action(
+        AuditLog.Action.DELETE, instance=credit, actor=actor,
+        old_value={"month": credit.month.isoformat(), "income": str(credit.income)},
+        new_value={"event": "INTEREST_CREDIT_DELETED", "reason": reason},
+    )
+    credit.delete()
+
+
+@transaction.atomic
+def request_withdrawal(member, amount, actor):
+    """A member asks to take out some or all of the interest available to them."""
+
+    if actor is None or actor.member_id != member.pk:
+        raise PermissionDenied("You can only withdraw your own interest.")
+
+    amount = Decimal(amount)
+
+    if amount <= 0 or amount != amount.to_integral_value():
+        raise InvestmentError("Enter a whole number of shillings greater than zero.")
+
+    available = interest_balance(member)["available"]
+
+    if amount > available:
+        raise InvestmentError(f"Only UGX {available:,.0f} is available to withdraw.")
+
+    withdrawal = InterestWithdrawal.objects.create(member=member, amount=amount, requested_by=actor)
+
+    log_action(
+        AuditLog.Action.CREATE, instance=withdrawal, actor=actor,
+        new_value={"event": "INTEREST_WITHDRAWAL_REQUESTED", "amount": str(amount)},
+    )
+    return withdrawal
+
+
+def _open_withdrawal(withdrawal):
+    withdrawal = InterestWithdrawal.objects.select_for_update().select_related("member").get(pk=withdrawal.pk)
+    if withdrawal.status != InterestWithdrawal.Status.REQUESTED:
+        raise InvestmentError("This request has already been dealt with.")
+    return withdrawal
+
+
+@transaction.atomic
+def pay_withdrawal(withdrawal, actor, method, reference=""):
+    _require(actor, "has_financial_write_access", "pay interest withdrawals")
+
+    withdrawal = _open_withdrawal(withdrawal)
+
+    if method not in ("CASH", "BANK", "MOBILE_MONEY"):
+        raise InvestmentError("Choose how the money was paid.")
+
+    withdrawal.status = InterestWithdrawal.Status.PAID
+    withdrawal.decided_at = timezone.now()
+    withdrawal.decided_by = actor
+    withdrawal.payment_method = method
+    withdrawal.reference = (reference or "").strip()
+    withdrawal.save()
+
+    log_action(
+        AuditLog.Action.UPDATE, instance=withdrawal, actor=actor,
+        new_value={"event": "INTEREST_WITHDRAWAL_PAID", "amount": str(withdrawal.amount),
+                   "method": method, "reference": withdrawal.reference},
+    )
+    return withdrawal
+
+
+@transaction.atomic
+def reject_withdrawal(withdrawal, actor, note):
+    _require(actor, "has_financial_write_access", "reject interest withdrawals")
+
+    withdrawal = _open_withdrawal(withdrawal)
+    note = (note or "").strip()
+
+    if not note:
+        raise InvestmentError("Give the member a reason for rejecting the request.")
+
+    withdrawal.status = InterestWithdrawal.Status.REJECTED
+    withdrawal.decided_at = timezone.now()
+    withdrawal.decided_by = actor
+    withdrawal.note = note
+    withdrawal.save()
+
+    log_action(
+        AuditLog.Action.UPDATE, instance=withdrawal, actor=actor,
+        new_value={"event": "INTEREST_WITHDRAWAL_REJECTED", "note": note},
+    )
+    return withdrawal
+
+
+@transaction.atomic
+def cancel_withdrawal(withdrawal, actor):
+    withdrawal = _open_withdrawal(withdrawal)
+
+    if actor is None or actor.member_id != withdrawal.member_id:
+        raise PermissionDenied("Only the member can cancel their own request.")
+
+    withdrawal.status = InterestWithdrawal.Status.CANCELLED
+    withdrawal.decided_at = timezone.now()
+    withdrawal.save()
+
+    log_action(
+        AuditLog.Action.UPDATE, instance=withdrawal, actor=actor,
+        new_value={"event": "INTEREST_WITHDRAWAL_CANCELLED"},
+    )
+    return withdrawal
+
+
+@transaction.atomic
+def delete_withdrawal(withdrawal, actor, reason):
+    _require(actor, "can_delete_records", "delete interest withdrawals")
+    reason = _delete_reason(reason)
+
+    withdrawal = InterestWithdrawal.objects.get(pk=withdrawal.pk)
+
+    log_action(
+        AuditLog.Action.DELETE, instance=withdrawal, actor=actor,
+        old_value={"member": withdrawal.member.member_code, "amount": str(withdrawal.amount),
+                   "status": withdrawal.status},
+        new_value={"event": "INTEREST_WITHDRAWAL_DELETED", "reason": reason},
+    )
+    withdrawal.delete()
+
+
+def other_savings(member):
+    """
+    Everything a member sees on their Other savings page: the balance, month-by-month history,
+    withdrawals, and what they can expect each month from unit trust at their current share.
+    The expectation is only an estimate from the latest month credited, not a promise.
+    """
+
+    balance = interest_balance(member)
+    lines = list(
+        MemberInterest.objects.filter(member=member).select_related("credit").order_by("-credit__month")
+    )
+    credits = list(InterestCredit.objects.order_by("-month"))
+    mine = contribution_shares()
+    row = next((r for r in mine["rows"] if r["member"].pk == member.pk), None)
+    my_deposits = row["total"] if row else ZERO
+
+    latest = credits[0] if credits else None
+    per_100k = ZERO
+    estimate = ZERO
+
+    if latest and latest.pool_deposits > 0:
+        rate = latest.income / latest.pool_deposits       # earned per shilling of deposits that month
+        per_100k = (rate * Decimal("100000")).quantize(Decimal("1"))
+        estimate = (rate * my_deposits).quantize(Decimal("1"))
+
+    average = ZERO
+    if lines:
+        average = (sum((l.amount for l in lines), ZERO) / len(lines)).quantize(Decimal("1"))
+
+    return {
+        "balance": balance,
+        "lines": lines,
+        "withdrawals": list(InterestWithdrawal.objects.filter(member=member)),
+        "my_deposits": my_deposits,
+        "share_percent": row["percent"] if row else ZERO,
+        "latest": latest,
+        "estimate_monthly": estimate,
+        "per_100k": per_100k,
+        "average_monthly": average,
+        "months_credited": len(lines),
+    }
+
+
+def other_savings_overview():
+    """For management: what is owed to each member, the months credited and the open requests."""
+
+    from django.db.models import Sum
+
+    members = Member.objects.filter(interest_credits__isnull=False).distinct().order_by("member_code")
+    rows = [{"member": m, **interest_balance(m)} for m in members]
+
+    return {
+        "rows": rows,
+        "owed": sum((r["available"] + r["pending"] for r in rows), ZERO),
+        "paid": InterestWithdrawal.objects.filter(status=InterestWithdrawal.Status.PAID)
+        .aggregate(t=Sum("amount"))["t"] or ZERO,
+        "credits": list(InterestCredit.objects.select_related("credited_by")),
+        "requests": list(
+            InterestWithdrawal.objects.filter(status=InterestWithdrawal.Status.REQUESTED).select_related("member")
+        ),
+        "recent": list(
+            InterestWithdrawal.objects.exclude(status=InterestWithdrawal.Status.REQUESTED)
+            .select_related("member")[:20]
+        ),
+    }

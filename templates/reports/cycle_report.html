@@ -75,8 +75,8 @@
 
 <h2 class="h5">5. Financial position (as of now)</h2>
 <div class="card fcu-card mb-4"><div class="table-responsive"><table class="table mb-0">
-  <thead><tr><th class="text-end">Members' deposits</th><th class="text-end">Emergency fund</th><th class="text-end">Loans receivable</th><th class="text-end">Investments</th><th class="text-end">Derived cash*</th></tr></thead>
-  <tbody><tr><td class="text-end">{{ pos.members_deposits|ugx }}</td><td class="text-end">{{ pos.emergency_fund|ugx }}</td><td class="text-end">{{ pos.loans_receivable|ugx }}</td><td class="text-end">{{ pos.investments|ugx }}</td><td class="text-end">{{ pos.derived_cash|ugx }}</td></tr></tbody>
+  <thead><tr><th class="text-end">Members' deposits</th><th class="text-end">Emergency fund</th><th class="text-end">Loans receivable</th><th class="text-end">Investments</th><th class="text-end">Other savings owed</th><th class="text-end">Derived cash*</th></tr></thead>
+  <tbody><tr><td class="text-end">{{ pos.members_deposits|ugx }}</td><td class="text-end">{{ pos.emergency_fund|ugx }}</td><td class="text-end">{{ pos.loans_receivable|ugx }}</td><td class="text-end">{{ pos.investments|ugx }}</td><td class="text-end">{{ pos.other_savings_owed|ugx }}</td><td class="text-end">{{ pos.derived_cash|ugx }}</td></tr></tbody>
 </table></div>
   <div class="card-body small text-muted border-top">*Worked out from every recorded movement of money. Expenses are included; membership fees are not recorded in the system, so check this against the bank and cash balances.</div>
 </div>

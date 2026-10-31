@@ -24,12 +24,12 @@
     <div class="table-responsive"><table class="table align-middle mb-0">
       <tbody>
         <tr><td>1. Interest on loans</td><td class="text-end">{{ live.loan_interest|ugx }}</td></tr>
-        <tr><td>2. Unit trust (earnings less fees)</td><td class="text-end">{{ live.unit_trust_income|ugx }}</td></tr>
+        <tr class="text-muted"><td>2. Unit trust (earnings less fees)<div class="small">Paid to members every month as their Other savings, so it is not shared again here.</div></td><td class="text-end"><s>{{ live.unit_trust_income|ugx }}</s></td></tr>
         <tr><td>3. Other investments (earnings less fees)</td><td class="text-end">{{ live.other_investment_income|ugx }}</td></tr>
         {% for row in live.other_breakdown %}
           <tr class="small text-muted"><td class="ps-4">{{ row.label }}</td><td class="text-end">{{ row.amount|ugx }}</td></tr>
         {% endfor %}
-        <tr class="fw-semibold"><td>Total income</td><td class="text-end">{{ live.gross_income|ugx }}</td></tr>
+        <tr class="fw-semibold"><td>Income to share (1 + 3)</td><td class="text-end">{{ live.gross_income|ugx }}</td></tr>
         <tr><td>Less expenses of the cycle</td><td class="text-end">{{ live.expenses|ugx }}</td></tr>
         <tr class="fw-semibold table-light"><td>Net profit</td><td class="text-end">{{ live.net_profit|ugx }}</td></tr>
       </tbody>

@@ -114,6 +114,7 @@ def cycle_workbook(report):
         ["Emergency fund", pos["emergency_fund"]],
         ["Loans receivable", pos["loans_receivable"]],
         ["Investments", pos["investments"]],
+        ["Other savings owed to members (unit trust interest)", pos["other_savings_owed"]],
         ["Derived cash (includes expenses, excludes membership fees)", pos["derived_cash"]],
     ]
     sheet = add_sheet(wb, "Summary", ["Item", "Value"], summary_rows, first=True)

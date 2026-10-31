@@ -46,9 +46,9 @@ class FigureTests(ProfitCase):
         self.assertEqual(f["loan_interest"], Decimal("15000"))
         self.assertEqual(f["unit_trust_income"], Decimal("45000"))          # 50,000 less 5,000 fees
         self.assertEqual(f["other_investment_income"], Decimal("50000"))    # 30,000 + 20,000
-        self.assertEqual(f["gross_income"], Decimal("110000"))
+        self.assertEqual(f["gross_income"], Decimal("65000"))     # unit trust is paid monthly as Other savings
         self.assertEqual(f["expenses"], Decimal("10000"))
-        self.assertEqual(f["net_profit"], Decimal("100000"))
+        self.assertEqual(f["net_profit"], Decimal("55000"))
         self.assertEqual({r["kind"]: r["amount"] for r in f["other_breakdown"]},
                          {"MICROFINANCE": Decimal("30000"), "REAL_ESTATE": Decimal("20000")})
 
@@ -62,11 +62,11 @@ class FigureTests(ProfitCase):
 class CaptureAndPublishTests(ProfitCase):
     def test_capture_shares_the_net_profit_by_relative_contribution(self):
         st = services.capture_profit(self.cycle, self.treasurer)
-        self.assertEqual(st.net_profit, Decimal("100000"))
+        self.assertEqual(st.net_profit, Decimal("55000"))
         amounts = {s.member_id: s.amount for s in st.shares.all()}
-        self.assertEqual(amounts[self.m1.pk], Decimal("75000"))
-        self.assertEqual(amounts[self.m2.pk], Decimal("25000"))
-        self.assertEqual(sum(amounts.values()), Decimal("100000"))
+        self.assertEqual(amounts[self.m1.pk], Decimal("41250"))
+        self.assertEqual(amounts[self.m2.pk], Decimal("13750"))
+        self.assertEqual(sum(amounts.values()), Decimal("55000"))
         self.assertFalse(st.is_published)
 
     def test_members_see_nothing_until_published_then_their_own_share(self):
@@ -74,9 +74,9 @@ class CaptureAndPublishTests(ProfitCase):
         self.assertEqual(services.member_profit(self.m1)["shares"], [])
         services.publish_profit(st, self.chair)
         mine = services.member_profit(self.m1)
-        self.assertEqual(mine["total"], Decimal("75000"))
+        self.assertEqual(mine["total"], Decimal("41250"))
         self.assertEqual(mine["shares"][0].share_percent, Decimal("75.0000"))
-        self.assertEqual(services.member_profit(self.m2)["total"], Decimal("25000"))
+        self.assertEqual(services.member_profit(self.m2)["total"], Decimal("13750"))
 
     def test_updating_withdraws_it_until_published_again(self):
         st = services.capture_profit(self.cycle, self.treasurer)
@@ -85,6 +85,7 @@ class CaptureAndPublishTests(ProfitCase):
         st = services.capture_profit(self.cycle, self.treasurer)
         self.assertFalse(st.is_published)
         self.assertEqual(st.unit_trust_income, Decimal("145000"))
+        self.assertEqual(st.net_profit, Decimal("55000"))   # unit trust never changes the shared profit
         self.assertEqual(ProfitStatement.objects.count(), 1)
 
     def test_a_loss_shares_nothing(self):
